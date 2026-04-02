@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/handlers"
@@ -10,6 +11,27 @@ import (
 
 func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
 	router := gin.Default()
+	router.Use(func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			if strings.HasPrefix(origin, "http://localhost:") ||
+				strings.HasPrefix(origin, "http://127.0.0.1:") ||
+				strings.HasPrefix(origin, "http://192.168.") ||
+				origin == "tauri://localhost" {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Vary", "Origin")
+			}
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			c.Header("Access-Control-Expose-Headers", "Content-Disposition")
+			c.Header("Access-Control-Allow-Credentials", "true")
+		}
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	})
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -24,6 +46,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		protected := v1.Group("/")
 		protected.Use(authMiddleware.RequireAuth())
 		protected.GET("/me", handler.Me)
+		protected.POST("/me/change-password", handler.ChangePassword)
 		protected.GET("/me/plan", handler.MyPlan)
 		protected.GET("/me/features", handler.MyFeatures)
 		protected.POST("/devices/register", handler.RegisterDevice)
@@ -38,6 +61,8 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		protected.GET("/shared/auth-files/:id/download", handler.DownloadSharedAuthFile)
 
 		admin := protected.Group("/admin")
+		admin.GET("/users", handler.AdminListUsers)
+		admin.GET("/plans", handler.AdminListPlans)
 		admin.POST("/shared-auth-files/upload", handler.AdminUploadSharedAuthFile)
 		admin.PATCH("/users/:id/plan", handler.AdminAssignPlan)
 	}

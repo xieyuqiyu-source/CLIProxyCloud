@@ -103,6 +103,23 @@ func (h *Handler) Me(c *gin.Context) {
 	})
 }
 
+func (h *Handler) ChangePassword(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if err := h.authSvc.ChangePassword(user.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func (h *Handler) MyPlan(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	plan, _, err := h.planSvc.ResolveUserPlan(user)
@@ -295,6 +312,58 @@ func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"file": authFile})
+}
+
+func (h *Handler) AdminListUsers(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	users, err := h.userSvc.ListUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	type userSummary struct {
+		User     *models.User            `json:"user"`
+		Plan     *models.Plan            `json:"plan"`
+		Features services.FeatureFlags   `json:"features"`
+	}
+
+	items := make([]userSummary, 0, len(users))
+	for idx := range users {
+		current := users[idx]
+		plan, features, err := h.planSvc.ResolveUserPlan(&current)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		items = append(items, userSummary{
+			User:     &current,
+			Plan:     plan,
+			Features: features,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": items})
+}
+
+func (h *Handler) AdminListPlans(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	plans, err := h.planSvc.ListPlans()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"plans": plans})
 }
 
 func (h *Handler) AdminAssignPlan(c *gin.Context) {

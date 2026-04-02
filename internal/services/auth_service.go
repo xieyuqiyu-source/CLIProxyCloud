@@ -75,6 +75,31 @@ func (s *AuthService) Login(email string, password string) (*models.User, string
 	return &user, token, nil
 }
 
+func (s *AuthService) ChangePassword(userID uint, currentPassword string, newPassword string) error {
+	if currentPassword == "" || newPassword == "" {
+		return fmt.Errorf("current password and new password are required")
+	}
+	if len(newPassword) < 6 {
+		return fmt.Errorf("new password must be at least 6 characters")
+	}
+
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return fmt.Errorf("current password is invalid")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Model(&user).Update("password_hash", string(hash)).Error
+}
+
 func (s *AuthService) issueToken(user *models.User) (string, error) {
 	plan, _, err := s.planSvc.ResolveUserPlan(user)
 	if err != nil {

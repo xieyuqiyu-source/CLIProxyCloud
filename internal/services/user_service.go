@@ -25,6 +25,14 @@ func (s *UserService) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
+func (s *UserService) ListUsers() ([]models.User, error) {
+	var users []models.User
+	if err := s.db.Order("id asc").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (s *UserService) EnsureAdmin(email string, password string) error {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" || password == "" {

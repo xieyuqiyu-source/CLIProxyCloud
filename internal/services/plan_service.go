@@ -126,6 +126,14 @@ func (s *PlanService) FindByCode(planCode string) (*models.Plan, error) {
 	return &plan, nil
 }
 
+func (s *PlanService) ListPlans() ([]models.Plan, error) {
+	var plans []models.Plan
+	if err := s.db.Order("id asc").Find(&plans).Error; err != nil {
+		return nil, err
+	}
+	return plans, nil
+}
+
 func (s *PlanService) FeaturesForPlan(plan *models.Plan) (FeatureFlags, error) {
 	if plan == nil {
 		return FeatureFlags{}, fmt.Errorf("plan is required")
