@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -17,6 +19,8 @@ type Config struct {
 }
 
 func Load() Config {
+	_ = godotenv.Load()
+
 	storageRoot := getEnv("CP_CLOUD_STORAGE_ROOT", "./storage")
 	if !filepath.IsAbs(storageRoot) {
 		storageRoot = filepath.Clean(storageRoot)
