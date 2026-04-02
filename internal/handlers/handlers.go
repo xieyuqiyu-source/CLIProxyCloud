@@ -256,12 +256,38 @@ func (h *Handler) ListSharedAuthFiles(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "your plan does not allow shared auth files"})
 		return
 	}
-	files, err := h.authFileSvc.ListShared()
+	files, err := h.authFileSvc.ListSharedByStrategy(features)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"files": files})
+}
+
+func (h *Handler) SharedAuthSyncPackage(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	_, features, err := h.planSvc.ResolveUserPlan(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !features.AllowSharedPool && user.Role != models.UserRoleAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "your plan does not allow shared auth files"})
+		return
+	}
+
+	files, err := h.authFileSvc.ListSharedByStrategy(features)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"mode":                   features.SharedPoolMode,
+		"max_files":              features.SharedPoolMaxFiles,
+		"refresh_after_minutes":  features.SharedPoolRefreshMins,
+		"files":                  files,
+	})
 }
 
 func (h *Handler) DownloadSharedAuthFile(c *gin.Context) {

@@ -58,6 +58,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		protected.DELETE("/me/auth-files/:id", handler.DeleteMyAuthFile)
 
 		protected.GET("/shared/auth-files", handler.ListSharedAuthFiles)
+		protected.GET("/shared/auth-files/sync-package", handler.SharedAuthSyncPackage)
 		protected.GET("/shared/auth-files/:id/download", handler.DownloadSharedAuthFile)
 
 		admin := protected.Group("/admin")

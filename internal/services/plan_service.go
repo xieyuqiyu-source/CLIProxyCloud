@@ -16,6 +16,9 @@ type FeatureFlags struct {
 	AllowPersonalCloudSync bool `json:"allow_personal_cloud_sync"`
 	AllowSharedPool        bool `json:"allow_shared_pool"`
 	MaxDevices             int  `json:"max_devices"`
+	SharedPoolMode         string `json:"shared_pool_mode"`
+	SharedPoolMaxFiles     int    `json:"shared_pool_max_files"`
+	SharedPoolRefreshMins  int    `json:"shared_pool_refresh_minutes"`
 }
 
 type PlanService struct {
@@ -45,21 +48,27 @@ func DefaultPlans() map[string]struct {
 				AllowPersonalCloudSync: false,
 				AllowSharedPool:        false,
 				MaxDevices:             1,
+				SharedPoolMode:         "none",
+				SharedPoolMaxFiles:     0,
+				SharedPoolRefreshMins:  0,
 			},
 		},
 		"vip1": {
-			Name:        "VIP 1",
-			Description: "支持多个认证文件、自动切换、个人云同步",
+			Name:        "Pro",
+			Description: "支持多个认证文件、自动切换、个人云同步，并可随机同步 3 个共享认证文件",
 			Features: FeatureFlags{
 				MaxEnabledAuthFiles:    999,
 				AllowAutoRotation:      true,
 				AllowPersonalCloudSync: true,
-				AllowSharedPool:        false,
+				AllowSharedPool:        true,
 				MaxDevices:             1,
+				SharedPoolMode:         "sample",
+				SharedPoolMaxFiles:     3,
+				SharedPoolRefreshMins:  30,
 			},
 		},
 		"vip2": {
-			Name:        "VIP 2",
+			Name:        "Pro Max",
 			Description: "支持 VIP1 全部功能，并可下载共享认证文件",
 			Features: FeatureFlags{
 				MaxEnabledAuthFiles:    999,
@@ -67,6 +76,9 @@ func DefaultPlans() map[string]struct {
 				AllowPersonalCloudSync: true,
 				AllowSharedPool:        true,
 				MaxDevices:             1,
+				SharedPoolMode:         "full",
+				SharedPoolMaxFiles:     999,
+				SharedPoolRefreshMins:  0,
 			},
 		},
 		"admin": {
@@ -78,6 +90,9 @@ func DefaultPlans() map[string]struct {
 				AllowPersonalCloudSync: true,
 				AllowSharedPool:        true,
 				MaxDevices:             999,
+				SharedPoolMode:         "full",
+				SharedPoolMaxFiles:     999,
+				SharedPoolRefreshMins:  0,
 			},
 		},
 	}

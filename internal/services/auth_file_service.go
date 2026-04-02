@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
@@ -56,6 +57,28 @@ func (s *AuthFileService) ListShared() ([]models.AuthFile, error) {
 		Order("id desc").
 		Find(&files).Error
 	return files, err
+}
+
+func (s *AuthFileService) ListSharedByStrategy(features FeatureFlags) ([]models.AuthFile, error) {
+	files, err := s.ListShared()
+	if err != nil {
+		return nil, err
+	}
+
+	if !features.AllowSharedPool || features.SharedPoolMode == "none" {
+		return []models.AuthFile{}, nil
+	}
+
+	if features.SharedPoolMode != "sample" || features.SharedPoolMaxFiles <= 0 || len(files) <= features.SharedPoolMaxFiles {
+		return files, nil
+	}
+
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	shuffled := append([]models.AuthFile(nil), files...)
+	rng.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+	return shuffled[:features.SharedPoolMaxFiles], nil
 }
 
 func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader) (*models.AuthFile, error) {
