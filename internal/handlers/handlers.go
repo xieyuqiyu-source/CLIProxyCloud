@@ -245,6 +245,16 @@ func (h *Handler) DeleteMyAuthFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (h *Handler) DeleteAllMyAuthFiles(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	deleted, err := h.authFileSvc.DeleteAllPersonal(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "deleted": deleted})
+}
+
 func (h *Handler) ListSharedAuthFiles(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	_, features, err := h.planSvc.ResolveUserPlan(user)
@@ -338,6 +348,36 @@ func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"file": authFile})
+}
+
+func (h *Handler) AdminDeleteSharedAuthFile(c *gin.Context) {
+	if err := h.userSvc.RequireAdmin(middleware.CurrentUser(c)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	authFileID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if err := h.authFileSvc.DeleteShared(uint(authFileID)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) AdminDeleteAllSharedAuthFiles(c *gin.Context) {
+	if err := h.userSvc.RequireAdmin(middleware.CurrentUser(c)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	deleted, err := h.authFileSvc.DeleteAllShared()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "deleted": deleted})
 }
 
 func (h *Handler) AdminListUsers(c *gin.Context) {

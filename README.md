@@ -126,15 +126,27 @@ The server defaults to:
 ### Personal Auth Files
 - `GET /api/v1/me/auth-files`
 - `POST /api/v1/me/auth-files/upload`
+- `DELETE /api/v1/me/auth-files`
 - `GET /api/v1/me/auth-files/:id/download`
 - `DELETE /api/v1/me/auth-files/:id`
+
+Notes:
+
+- personal uploads overwrite same-name files for the same user
+- bulk delete removes all personal cloud auth files for the current user
 
 ### Shared Pool
 - `GET /api/v1/shared/auth-files`
 - `GET /api/v1/shared/auth-files/:id/download`
 
+Notes:
+
+- shared uploads overwrite same-name files in the shared pool
+
 ### Admin
 - `POST /api/v1/admin/shared-auth-files/upload`
+- `DELETE /api/v1/admin/shared-auth-files`
+- `DELETE /api/v1/admin/shared-auth-files/:id`
 - `PATCH /api/v1/admin/users/:id/plan`
 
 ## Current Scope
@@ -145,6 +157,8 @@ This first implementation focuses on:
 - one-device enforcement for non-admin users
 - encrypted auth file storage
 - shared auth file pool upload and download
+- same-name overwrite for cloud auth uploads
+- one-click delete for personal uploads and shared pool files
 
 Not yet implemented:
 
@@ -153,4 +167,3 @@ Not yet implemented:
 - object storage
 - background sync orchestration
 - admin console UI
-

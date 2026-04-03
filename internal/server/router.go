@@ -54,6 +54,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 
 		protected.GET("/me/auth-files", handler.ListMyAuthFiles)
 		protected.POST("/me/auth-files/upload", handler.UploadMyAuthFile)
+		protected.DELETE("/me/auth-files", handler.DeleteAllMyAuthFiles)
 		protected.GET("/me/auth-files/:id/download", handler.DownloadMyAuthFile)
 		protected.DELETE("/me/auth-files/:id", handler.DeleteMyAuthFile)
 
@@ -65,6 +66,8 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		admin.GET("/users", handler.AdminListUsers)
 		admin.GET("/plans", handler.AdminListPlans)
 		admin.POST("/shared-auth-files/upload", handler.AdminUploadSharedAuthFile)
+		admin.DELETE("/shared-auth-files", handler.AdminDeleteAllSharedAuthFiles)
+		admin.DELETE("/shared-auth-files/:id", handler.AdminDeleteSharedAuthFile)
 		admin.PATCH("/users/:id/plan", handler.AdminAssignPlan)
 	}
 

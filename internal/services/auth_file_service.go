@@ -105,11 +105,57 @@ func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *ui
 	if err != nil {
 		return nil, err
 	}
+	displayName := strings.TrimSuffix(filepath.Base(fileHeader.Filename), filepath.Ext(fileHeader.Filename))
+	provider := detectProvider(fileHeader.Filename)
+
+	var existing models.AuthFile
+	query := s.db.Where("owner_type = ? AND file_name = ?", ownerType, fileHeader.Filename)
+	if ownerUserID == nil {
+		query = query.Where("owner_user_id IS NULL")
+	} else {
+		query = query.Where("owner_user_id = ?", *ownerUserID)
+	}
+
+	err = query.First(&existing).Error
+	if err == nil {
+		oldPath := existing.StoragePath
+		existing.Provider = provider
+		existing.StoragePath = path
+		existing.FileHash = hash
+		existing.Encrypted = true
+		existing.Status = "active"
+		existing.SourceType = sourceType
+		existing.PlanRequired = planRequired
+		existing.DisplayName = displayName
+		if err := s.db.Save(&existing).Error; err != nil {
+			return nil, err
+		}
+
+		version := 1
+		var lastVersion models.AuthFileVersion
+		if err := s.db.Where("auth_file_id = ?", existing.ID).Order("version desc").First(&lastVersion).Error; err == nil {
+			version = lastVersion.Version + 1
+		}
+		if err := s.db.Create(&models.AuthFileVersion{
+			AuthFileID:  existing.ID,
+			Version:     version,
+			StoragePath: path,
+			FileHash:    hash,
+			CreatedAt:   time.Now(),
+		}).Error; err != nil {
+			return nil, err
+		}
+		_ = s.storage.Delete(oldPath)
+		return &existing, nil
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
 
 	authFile := &models.AuthFile{
 		OwnerType:    ownerType,
 		OwnerUserID:  ownerUserID,
-		Provider:     detectProvider(fileHeader.Filename),
+		Provider:     provider,
 		FileName:     fileHeader.Filename,
 		StoragePath:  path,
 		FileHash:     hash,
@@ -117,7 +163,7 @@ func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *ui
 		Status:       "active",
 		SourceType:   sourceType,
 		PlanRequired: planRequired,
-		DisplayName:  strings.TrimSuffix(filepath.Base(fileHeader.Filename), filepath.Ext(fileHeader.Filename)),
+		DisplayName:  displayName,
 	}
 	if err := s.db.Create(authFile).Error; err != nil {
 		return nil, err
@@ -164,5 +210,61 @@ func (s *AuthFileService) ReadContent(file *models.AuthFile) ([]byte, error) {
 }
 
 func (s *AuthFileService) DeletePersonal(userID uint, authFileID uint) error {
-	return s.db.Where("id = ? AND owner_type = ? AND owner_user_id = ?", authFileID, models.AuthOwnerTypeUser, userID).Delete(&models.AuthFile{}).Error
+	file, err := s.FindPersonal(userID, authFileID)
+	if err != nil {
+		return err
+	}
+	return s.deleteAuthFile(file)
+}
+
+func (s *AuthFileService) DeleteAllPersonal(userID uint) (int64, error) {
+	var files []models.AuthFile
+	if err := s.db.Where("owner_type = ? AND owner_user_id = ?", models.AuthOwnerTypeUser, userID).Find(&files).Error; err != nil {
+		return 0, err
+	}
+	var deleted int64
+	for index := range files {
+		if err := s.deleteAuthFile(&files[index]); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+func (s *AuthFileService) DeleteShared(authFileID uint) error {
+	file, err := s.FindShared(authFileID)
+	if err != nil {
+		return err
+	}
+	return s.deleteAuthFile(file)
+}
+
+func (s *AuthFileService) DeleteAllShared() (int64, error) {
+	var files []models.AuthFile
+	if err := s.db.Where("owner_type = ?", models.AuthOwnerTypeShared).Find(&files).Error; err != nil {
+		return 0, err
+	}
+	var deleted int64
+	for index := range files {
+		if err := s.deleteAuthFile(&files[index]); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+func (s *AuthFileService) deleteAuthFile(file *models.AuthFile) error {
+	if file == nil {
+		return nil
+	}
+	if err := s.db.Where("auth_file_id = ?", file.ID).Delete(&models.AuthFileVersion{}).Error; err != nil {
+		return err
+	}
+	if err := s.db.Delete(&models.AuthFile{}, file.ID).Error; err != nil {
+		return err
+	}
+	_ = s.storage.Delete(file.StoragePath)
+	return nil
 }
