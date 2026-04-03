@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -14,6 +15,7 @@ type Config struct {
 	JWTSecret     string
 	StorageRoot   string
 	StorageKey    string
+	PublicBaseURL string
 	AdminEmail    string
 	AdminPassword string
 }
@@ -33,6 +35,7 @@ func Load() Config {
 		JWTSecret:     getEnv("CP_CLOUD_JWT_SECRET", "dev-secret-change-me"),
 		StorageRoot:   storageRoot,
 		StorageKey:    getEnv("CP_CLOUD_STORAGE_KEY", "dev-storage-key-change-me"),
+		PublicBaseURL: strings.TrimRight(getEnv("CP_CLOUD_PUBLIC_BASE_URL", ""), "/"),
 		AdminEmail:    getEnv("CP_CLOUD_ADMIN_EMAIL", "admin"),
 		AdminPassword: getEnv("CP_CLOUD_ADMIN_PASSWORD", "change-this-password"),
 	}

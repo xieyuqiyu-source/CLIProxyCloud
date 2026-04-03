@@ -65,6 +65,7 @@ Important variables:
 - `CP_CLOUD_JWT_SECRET`
 - `CP_CLOUD_STORAGE_ROOT`
 - `CP_CLOUD_STORAGE_KEY`
+- `CP_CLOUD_PUBLIC_BASE_URL`
 - `CP_CLOUD_ADMIN_EMAIL`
 - `CP_CLOUD_ADMIN_PASSWORD`
 
@@ -144,10 +145,33 @@ Notes:
 - shared uploads overwrite same-name files in the shared pool
 
 ### Admin
+- `POST /api/v1/admin/app-releases/upload`
 - `POST /api/v1/admin/shared-auth-files/upload`
 - `DELETE /api/v1/admin/shared-auth-files`
 - `DELETE /api/v1/admin/shared-auth-files/:id`
 - `PATCH /api/v1/admin/users/:id/plan`
+
+### App Update Packages
+
+Admin can upload desktop installers directly from `CLIProxyApp`.
+
+- supported files: `.dmg`, `.exe`, `.app.zip`
+- upload endpoint: `POST /api/v1/admin/app-releases/upload`
+- required form fields:
+  - `version`
+  - `file`
+- optional form field:
+  - `notes`
+
+On each upload, `CLIProxyCloud` will:
+
+- save the package under `storage/downloads/cliproxyapp/`
+- update `storage/downloads/cliproxyapp/latest.json`
+- preserve the other platform download entry if it already exists
+
+The public update manifest is served at:
+
+- `/downloads/cliproxyapp/latest.json`
 
 ## Current Scope
 

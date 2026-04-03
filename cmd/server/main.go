@@ -42,10 +42,11 @@ func main() {
 	authSvc := services.NewAuthService(db, cfg.JWTSecret, planSvc)
 	deviceSvc := services.NewDeviceService(db)
 	authFileSvc := services.NewAuthFileService(db, storageSvc)
+	appReleaseSvc := services.NewAppReleaseService(cfg.StorageRoot, cfg.PublicBaseURL)
 
-	handler := handlers.New(authSvc, userSvc, planSvc, deviceSvc, authFileSvc)
+	handler := handlers.New(authSvc, userSvc, planSvc, deviceSvc, authFileSvc, appReleaseSvc)
 	authMiddleware := middleware.NewAuthMiddleware(authSvc, userSvc)
-	router := server.NewRouter(handler, authMiddleware)
+	router := server.NewRouter(handler, authMiddleware, cfg.StorageRoot)
 
 	log.Printf("CLIProxyCloud listening on %s", cfg.Addr)
 	if err := router.Run(cfg.Addr); err != nil {

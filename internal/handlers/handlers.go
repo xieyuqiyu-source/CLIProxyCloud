@@ -13,11 +13,12 @@ import (
 )
 
 type Handler struct {
-	authSvc     *services.AuthService
-	userSvc     *services.UserService
-	planSvc     *services.PlanService
-	deviceSvc   *services.DeviceService
-	authFileSvc *services.AuthFileService
+	authSvc       *services.AuthService
+	userSvc       *services.UserService
+	planSvc       *services.PlanService
+	deviceSvc     *services.DeviceService
+	authFileSvc   *services.AuthFileService
+	appReleaseSvc *services.AppReleaseService
 }
 
 func New(
@@ -26,13 +27,15 @@ func New(
 	planSvc *services.PlanService,
 	deviceSvc *services.DeviceService,
 	authFileSvc *services.AuthFileService,
+	appReleaseSvc *services.AppReleaseService,
 ) *Handler {
 	return &Handler{
-		authSvc:     authSvc,
-		userSvc:     userSvc,
-		planSvc:     planSvc,
-		deviceSvc:   deviceSvc,
-		authFileSvc: authFileSvc,
+		authSvc:       authSvc,
+		userSvc:       userSvc,
+		planSvc:       planSvc,
+		deviceSvc:     deviceSvc,
+		authFileSvc:   authFileSvc,
+		appReleaseSvc: appReleaseSvc,
 	}
 }
 
@@ -293,10 +296,10 @@ func (h *Handler) SharedAuthSyncPackage(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"mode":                   features.SharedPoolMode,
-		"max_files":              features.SharedPoolMaxFiles,
-		"refresh_after_minutes":  features.SharedPoolRefreshMins,
-		"files":                  files,
+		"mode":                  features.SharedPoolMode,
+		"max_files":             features.SharedPoolMaxFiles,
+		"refresh_after_minutes": features.SharedPoolRefreshMins,
+		"files":                 files,
 	})
 }
 
@@ -394,9 +397,9 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	}
 
 	type userSummary struct {
-		User     *models.User            `json:"user"`
-		Plan     *models.Plan            `json:"plan"`
-		Features services.FeatureFlags   `json:"features"`
+		User     *models.User          `json:"user"`
+		Plan     *models.Plan          `json:"plan"`
+		Features services.FeatureFlags `json:"features"`
 	}
 
 	items := make([]userSummary, 0, len(users))
@@ -469,4 +472,20 @@ func (h *Handler) AdminAssignPlan(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) AdminUploadAppRelease(c *gin.Context) {
+	version := strings.TrimSpace(c.PostForm("version"))
+	notes := strings.TrimSpace(c.PostForm("notes"))
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	manifest, err := h.appReleaseSvc.Upload(version, notes, file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"manifest": manifest})
 }

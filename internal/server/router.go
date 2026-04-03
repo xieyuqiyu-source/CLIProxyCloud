@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +10,7 @@ import (
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/middleware"
 )
 
-func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddleware) *gin.Engine {
+func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddleware, storageRoot string) *gin.Engine {
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
@@ -36,6 +37,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	router.StaticFS("/downloads", gin.Dir(filepath.Join(storageRoot, "downloads"), false))
 
 	v1 := router.Group("/api/v1")
 	{
@@ -65,6 +67,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		admin := protected.Group("/admin")
 		admin.GET("/users", handler.AdminListUsers)
 		admin.GET("/plans", handler.AdminListPlans)
+		admin.POST("/app-releases/upload", handler.AdminUploadAppRelease)
 		admin.POST("/shared-auth-files/upload", handler.AdminUploadSharedAuthFile)
 		admin.DELETE("/shared-auth-files", handler.AdminDeleteAllSharedAuthFiles)
 		admin.DELETE("/shared-auth-files/:id", handler.AdminDeleteSharedAuthFile)
