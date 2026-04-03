@@ -3,5 +3,6 @@ tmp/
 .env
 .DS_Store
 storage/
+!internal/storage/
+!internal/storage/*.go
 coverage.out
-
