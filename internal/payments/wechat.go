@@ -86,6 +86,9 @@ func (c *WeChatClient) CreateNativeOrder(ctx context.Context, req CreateOrderReq
 			"currency": firstNonEmpty(req.Currency, "CNY"),
 		},
 	}
+	if req.ExpiresIn > 0 {
+		bodyMap["time_expire"] = time.Now().Add(req.ExpiresIn).Format(time.RFC3339)
+	}
 	body, _ := json.Marshal(bodyMap)
 	respBody, err := c.doSignedRequest(ctx, http.MethodPost, "/v3/pay/transactions/native", "", body)
 	if err != nil {

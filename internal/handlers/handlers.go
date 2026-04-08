@@ -494,9 +494,11 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	}
 
 	type userSummary struct {
-		User     *models.User          `json:"user"`
-		Plan     *models.Plan          `json:"plan"`
-		Features services.FeatureFlags `json:"features"`
+		User      *models.User             `json:"user"`
+		Plan      *models.Plan             `json:"plan"`
+		Features  services.FeatureFlags    `json:"features"`
+		ExpiresAt *time.Time               `json:"expiresAt"`
+		Sub       *models.UserSubscription `json:"subscription,omitempty"`
 	}
 
 	items := make([]userSummary, 0, len(users))
@@ -507,10 +509,20 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		sub, _, subErr := h.planSvc.GetActiveSubscription(current.ID)
+		if subErr != nil {
+			sub = nil
+		}
+		var expiresAt *time.Time
+		if sub != nil {
+			expiresAt = sub.ExpiresAt
+		}
 		items = append(items, userSummary{
-			User:     &current,
-			Plan:     plan,
-			Features: features,
+			User:      &current,
+			Plan:      plan,
+			Features:  features,
+			ExpiresAt: expiresAt,
+			Sub:       sub,
 		})
 	}
 
@@ -690,13 +702,36 @@ func (h *Handler) AdminListPaymentOrders(c *gin.Context) {
 			limit = parsed
 		}
 	}
+	status := strings.TrimSpace(c.Query("status"))
+	query := strings.TrimSpace(c.Query("query"))
 
-	orders, err := h.paymentSvc.ListAdminOrders(limit)
+	orders, err := h.paymentSvc.ListAdminOrders(limit, status, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"orders": orders})
+}
+
+func (h *Handler) AdminRegrantPaymentOrder(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	orderNo := strings.TrimSpace(c.Param("orderNo"))
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order no"})
+		return
+	}
+
+	order, err := h.paymentSvc.RegrantOrder(orderNo)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "order": order})
 }
 
 func (h *Handler) AdminAssignPlan(c *gin.Context) {

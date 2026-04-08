@@ -162,12 +162,28 @@ func (s *PaymentService) FindOrderByNo(orderNo string) (*models.PaymentOrder, er
 	return &order, nil
 }
 
-func (s *PaymentService) ListAdminOrders(limit int) ([]models.PaymentOrder, error) {
+func (s *PaymentService) ListAdminOrders(limit int, status string, query string) ([]models.PaymentOrder, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	var orders []models.PaymentOrder
-	err := s.db.Order("id desc").Limit(limit).Find(&orders).Error
+	db := s.db.Model(&models.PaymentOrder{})
+	status = strings.TrimSpace(strings.ToLower(status))
+	if status != "" && status != "all" {
+		db = db.Where("status = ?", status)
+	}
+	query = strings.TrimSpace(query)
+	if query != "" {
+		like := "%" + query + "%"
+		db = db.Where(
+			"order_no LIKE ? OR plan_code LIKE ? OR product_code LIKE ? OR product_display LIKE ? OR payment_provider LIKE ?",
+			like, like, like, like, like,
+		)
+		if userID, err := strconv.ParseUint(query, 10, 64); err == nil {
+			db = db.Or("user_id = ?", userID)
+		}
+	}
+	err := db.Order("id desc").Limit(limit).Find(&orders).Error
 	return orders, err
 }
 
@@ -189,7 +205,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		return existing, product, checkout, nil
 	}
 
-	expiresAt := time.Now().Add(15 * time.Minute)
+	expiresAt := time.Now().Add(5 * time.Minute)
 	order := &models.PaymentOrder{
 		OrderNo:         newOrderNo(),
 		UserID:          userID,
@@ -222,6 +238,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		Amount:      order.Amount,
 		Currency:    order.Currency,
 		NotifyURL:   s.notifyURLForProvider(provider),
+		ExpiresIn:   5 * time.Minute,
 	}
 
 	switch provider {
@@ -504,11 +521,25 @@ func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
 
 	var expiresAt *time.Time
 	if order.DurationDays > 0 {
-		next := time.Now().Add(time.Duration(order.DurationDays) * 24 * time.Hour)
+		next := addPlanDuration(time.Now(), order.DurationDays)
 		expiresAt = &next
 	}
 
 	return s.plan.AssignPlan(order.UserID, order.PlanCode, expiresAt)
+}
+
+func (s *PaymentService) RegrantOrder(orderNo string) (*models.PaymentOrder, error) {
+	order, err := s.FindOrderByNo(orderNo)
+	if err != nil {
+		return nil, err
+	}
+	if order.Status != models.PaymentOrderStatusPaid {
+		return nil, fmt.Errorf("only paid orders can be regranted")
+	}
+	if err := s.grantPlanIfPaid(order); err != nil {
+		return nil, err
+	}
+	return order, nil
 }
 
 func (s *PaymentService) checkoutFromExistingOrder(order *models.PaymentOrder) *PaymentCheckout {
@@ -546,6 +577,16 @@ func (s *PaymentService) checkoutFromExistingOrder(order *models.PaymentOrder) *
 		}
 	}
 	return checkout
+}
+
+func addPlanDuration(start time.Time, durationDays int) time.Time {
+	if durationDays <= 0 {
+		return start
+	}
+	if durationDays%30 == 0 {
+		return start.AddDate(0, durationDays/30, 0)
+	}
+	return start.Add(time.Duration(durationDays) * 24 * time.Hour)
 }
 
 func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {

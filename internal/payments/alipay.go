@@ -65,11 +65,15 @@ func (c *AlipayClient) Enabled() bool {
 }
 
 func (c *AlipayClient) CreatePrecreateOrder(ctx context.Context, req CreateOrderRequest) (*CreateOrderResult, error) {
+	timeoutExpress := "5m"
+	if req.ExpiresIn > 0 {
+		timeoutExpress = formatAlipayTimeout(req.ExpiresIn)
+	}
 	bizContent, _ := json.Marshal(map[string]any{
 		"out_trade_no":    req.OrderNo,
 		"total_amount":    amountToYuan(req.Amount),
 		"subject":         req.Description,
-		"timeout_express": "15m",
+		"timeout_express": timeoutExpress,
 	})
 	params := url.Values{}
 	params.Set("app_id", c.cfg.AppID)
@@ -255,6 +259,14 @@ func buildAlipaySignContent(values url.Values, includeEmptySign bool) string {
 
 func amountToYuan(amount int64) string {
 	return fmt.Sprintf("%.2f", float64(amount)/100.0)
+}
+
+func formatAlipayTimeout(duration time.Duration) string {
+	minutes := int(duration / time.Minute)
+	if minutes <= 0 {
+		minutes = 5
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func mapAlipayTradeState(value string) string {

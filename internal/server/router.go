@@ -76,6 +76,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		admin.POST("/pay/products", handler.AdminCreatePaymentProduct)
 		admin.PATCH("/pay/products/:id", handler.AdminUpdatePaymentProduct)
 		admin.GET("/pay/orders", handler.AdminListPaymentOrders)
+		admin.POST("/pay/orders/:orderNo/regrant", handler.AdminRegrantPaymentOrder)
 		admin.POST("/app-releases/upload", handler.AdminUploadAppRelease)
 		admin.POST("/shared-auth-files/upload", handler.AdminUploadSharedAuthFile)
 		admin.DELETE("/shared-auth-files", handler.AdminDeleteAllSharedAuthFiles)
