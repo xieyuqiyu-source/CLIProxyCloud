@@ -40,6 +40,17 @@
 ### GET `/api/v1/shared/auth-files/:id/download`
 - requires `allow_shared_pool`
 
+### GET `/api/v1/pay/products`
+- return enabled payment products
+- for `CLIProxyApp` purchase UI
+
+### POST `/api/v1/pay/orders`
+- create a local pending order
+- current stage does not call WeChat or Alipay yet
+
+### GET `/api/v1/pay/orders/:orderNo`
+- return current order status
+
 ## Admin
 
 ### POST `/api/v1/admin/shared-auth-files/upload`
@@ -48,3 +59,10 @@
 - `plan_code`
 - optional `expires_at`
 
+### GET `/api/v1/admin/pay/products`
+
+### POST `/api/v1/admin/pay/products`
+
+### PATCH `/api/v1/admin/pay/products/:id`
+
+### GET `/api/v1/admin/pay/orders`

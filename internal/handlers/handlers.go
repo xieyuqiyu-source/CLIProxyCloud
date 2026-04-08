@@ -19,6 +19,7 @@ type Handler struct {
 	deviceSvc     *services.DeviceService
 	authFileSvc   *services.AuthFileService
 	appReleaseSvc *services.AppReleaseService
+	paymentSvc    *services.PaymentService
 }
 
 func New(
@@ -28,6 +29,7 @@ func New(
 	deviceSvc *services.DeviceService,
 	authFileSvc *services.AuthFileService,
 	appReleaseSvc *services.AppReleaseService,
+	paymentSvc *services.PaymentService,
 ) *Handler {
 	return &Handler{
 		authSvc:       authSvc,
@@ -36,6 +38,7 @@ func New(
 		deviceSvc:     deviceSvc,
 		authFileSvc:   authFileSvc,
 		appReleaseSvc: appReleaseSvc,
+		paymentSvc:    paymentSvc,
 	}
 }
 
@@ -141,6 +144,59 @@ func (h *Handler) MyFeatures(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"features": features})
+}
+
+func (h *Handler) ListPaymentProducts(c *gin.Context) {
+	products, err := h.paymentSvc.ListEnabledProducts()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"products": products})
+}
+
+func (h *Handler) CreatePaymentOrder(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	var req struct {
+		ProductCode string `json:"product_code"`
+		Provider    string `json:"provider"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	order, product, err := h.paymentSvc.CreateOrder(
+		user.ID,
+		req.ProductCode,
+		models.PaymentProvider(strings.TrimSpace(strings.ToLower(req.Provider))),
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"order":           order,
+		"product":         product,
+		"payment_enabled": false,
+		"message":         "payment provider integration is not connected yet",
+	})
+}
+
+func (h *Handler) GetPaymentOrder(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	orderNo := strings.TrimSpace(c.Param("orderNo"))
+	order, err := h.paymentSvc.FindOrderByNo(orderNo)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "payment order not found"})
+		return
+	}
+	if user.Role != models.UserRoleAdmin && order.UserID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "payment order access denied"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"order": order})
 }
 
 func (h *Handler) RegisterDevice(c *gin.Context) {
@@ -433,6 +489,173 @@ func (h *Handler) AdminListPlans(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"plans": plans})
+}
+
+func (h *Handler) AdminListPaymentProducts(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	products, err := h.paymentSvc.ListAdminProducts()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"products": products})
+}
+
+func (h *Handler) AdminCreatePaymentProduct(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	var req struct {
+		ProductCode  string `json:"product_code"`
+		Name         string `json:"name"`
+		DisplayName  string `json:"display_name"`
+		PlanCode     string `json:"plan_code"`
+		PriceAmount  int64  `json:"price_amount"`
+		Currency     string `json:"currency"`
+		DurationDays int    `json:"duration_days"`
+		Status       string `json:"status"`
+		SortOrder    int    `json:"sort_order"`
+		Description  string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	product, err := h.paymentSvc.UpsertProduct(req.ProductCode, services.PaymentProductInput{
+		ProductCode:  req.ProductCode,
+		Name:         req.Name,
+		DisplayName:  req.DisplayName,
+		PlanCode:     req.PlanCode,
+		PriceAmount:  req.PriceAmount,
+		Currency:     req.Currency,
+		DurationDays: req.DurationDays,
+		Status:       models.PaymentProductStatus(strings.TrimSpace(req.Status)),
+		SortOrder:    req.SortOrder,
+		Description:  req.Description,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"product": product})
+}
+
+func (h *Handler) AdminUpdatePaymentProduct(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid product id"})
+		return
+	}
+
+	current, err := h.paymentSvc.FindProductByID(uint(productID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "payment product not found"})
+		return
+	}
+
+	var req struct {
+		ProductCode  string  `json:"product_code"`
+		Name         *string `json:"name"`
+		DisplayName  *string `json:"display_name"`
+		PlanCode     *string `json:"plan_code"`
+		PriceAmount  *int64  `json:"price_amount"`
+		Currency     *string `json:"currency"`
+		DurationDays *int    `json:"duration_days"`
+		Status       *string `json:"status"`
+		SortOrder    *int    `json:"sort_order"`
+		Description  *string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	input := services.PaymentProductInput{
+		ProductCode:  current.ProductCode,
+		Name:         current.Name,
+		DisplayName:  current.DisplayName,
+		PlanCode:     current.PlanCode,
+		PriceAmount:  current.PriceAmount,
+		Currency:     current.Currency,
+		DurationDays: current.DurationDays,
+		Status:       current.Status,
+		SortOrder:    current.SortOrder,
+		Description:  current.Description,
+	}
+	if trimmed := strings.TrimSpace(req.ProductCode); trimmed != "" {
+		input.ProductCode = trimmed
+	}
+	if req.Name != nil {
+		input.Name = *req.Name
+	}
+	if req.DisplayName != nil {
+		input.DisplayName = *req.DisplayName
+	}
+	if req.PlanCode != nil {
+		input.PlanCode = *req.PlanCode
+	}
+	if req.PriceAmount != nil {
+		input.PriceAmount = *req.PriceAmount
+	}
+	if req.Currency != nil {
+		input.Currency = *req.Currency
+	}
+	if req.DurationDays != nil {
+		input.DurationDays = *req.DurationDays
+	}
+	if req.Status != nil {
+		input.Status = models.PaymentProductStatus(strings.TrimSpace(*req.Status))
+	}
+	if req.SortOrder != nil {
+		input.SortOrder = *req.SortOrder
+	}
+	if req.Description != nil {
+		input.Description = *req.Description
+	}
+
+	product, err := h.paymentSvc.UpsertProduct(input.ProductCode, input)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"product": product})
+}
+
+func (h *Handler) AdminListPaymentOrders(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit := 50
+	if value := strings.TrimSpace(c.Query("limit")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			limit = parsed
+		}
+	}
+
+	orders, err := h.paymentSvc.ListAdminOrders(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"orders": orders})
 }
 
 func (h *Handler) AdminAssignPlan(c *gin.Context) {

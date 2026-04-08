@@ -30,5 +30,8 @@ func Migrate(db *gorm.DB) error {
 		&models.AuthFile{},
 		&models.AuthFileVersion{},
 		&models.SyncLog{},
+		&models.PaymentProduct{},
+		&models.PaymentOrder{},
+		&models.PaymentCallback{},
 	)
 }

@@ -43,8 +43,12 @@ func main() {
 	deviceSvc := services.NewDeviceService(db)
 	authFileSvc := services.NewAuthFileService(db, storageSvc)
 	appReleaseSvc := services.NewAppReleaseService(cfg.StorageRoot, cfg.PublicBaseURL)
+	paymentSvc := services.NewPaymentService(db)
+	if err := paymentSvc.SeedDefaults(); err != nil {
+		log.Fatalf("seed payment products: %v", err)
+	}
 
-	handler := handlers.New(authSvc, userSvc, planSvc, deviceSvc, authFileSvc, appReleaseSvc)
+	handler := handlers.New(authSvc, userSvc, planSvc, deviceSvc, authFileSvc, appReleaseSvc, paymentSvc)
 	authMiddleware := middleware.NewAuthMiddleware(authSvc, userSvc)
 	router := server.NewRouter(handler, authMiddleware, cfg.StorageRoot)
 

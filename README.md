@@ -9,6 +9,7 @@ It manages:
 - device binding
 - personal auth file cloud sync
 - shared auth file pool
+- future payment products and subscription order flow
 
 It works together with:
 
@@ -191,3 +192,19 @@ Not yet implemented:
 - object storage
 - background sync orchestration
 - admin console UI
+- WeChat Pay and Alipay order flow
+
+## Planned Payment Support
+
+Payment planning has been documented in:
+
+- [cpcloud-payment-plan.md](/Users/xieyuqiyu/Documents/xieyuqiyu/CLIProxy/CLIProxyCloud/docs/cpcloud-payment-plan.md)
+
+The planned direction is:
+
+- desktop QR-code payment flow
+- WeChat Native Pay
+- Alipay QR-code order flow
+- admin-manageable product pricing
+- order callback verification
+- automatic plan upgrade after payment success

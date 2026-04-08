@@ -51,6 +51,30 @@ const (
 	SyncActionRegisterDevice SyncAction = "register_device"
 )
 
+type PaymentProvider string
+
+const (
+	PaymentProviderWeChat PaymentProvider = "wechat"
+	PaymentProviderAlipay PaymentProvider = "alipay"
+)
+
+type PaymentProductStatus string
+
+const (
+	PaymentProductStatusActive   PaymentProductStatus = "active"
+	PaymentProductStatusDisabled PaymentProductStatus = "disabled"
+)
+
+type PaymentOrderStatus string
+
+const (
+	PaymentOrderStatusPending  PaymentOrderStatus = "pending"
+	PaymentOrderStatusPaid     PaymentOrderStatus = "paid"
+	PaymentOrderStatusClosed   PaymentOrderStatus = "closed"
+	PaymentOrderStatusFailed   PaymentOrderStatus = "failed"
+	PaymentOrderStatusRefunded PaymentOrderStatus = "refunded"
+)
+
 type User struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Email        string    `gorm:"size:190;uniqueIndex;not null" json:"email"`
@@ -130,4 +154,48 @@ type SyncLog struct {
 	Result     string     `gorm:"size:64;not null" json:"result"`
 	Message    string     `gorm:"type:text" json:"message"`
 	CreatedAt  time.Time  `json:"createdAt"`
+}
+
+type PaymentProduct struct {
+	ID           uint                 `gorm:"primaryKey" json:"id"`
+	ProductCode  string               `gorm:"size:64;uniqueIndex;not null" json:"productCode"`
+	Name         string               `gorm:"size:128;not null" json:"name"`
+	DisplayName  string               `gorm:"size:128;not null" json:"displayName"`
+	PlanCode     string               `gorm:"size:64;index;not null" json:"planCode"`
+	PriceAmount  int64                `gorm:"not null" json:"priceAmount"`
+	Currency     string               `gorm:"size:16;not null;default:CNY" json:"currency"`
+	DurationDays int                  `gorm:"not null;default:30" json:"durationDays"`
+	Status       PaymentProductStatus `gorm:"size:32;not null;default:active" json:"status"`
+	SortOrder    int                  `gorm:"not null;default:0" json:"sortOrder"`
+	Description  string               `gorm:"type:text" json:"description"`
+	CreatedAt    time.Time            `json:"createdAt"`
+	UpdatedAt    time.Time            `json:"updatedAt"`
+}
+
+type PaymentOrder struct {
+	ID              uint               `gorm:"primaryKey" json:"id"`
+	OrderNo         string             `gorm:"size:64;uniqueIndex;not null" json:"orderNo"`
+	UserID          uint               `gorm:"index;not null" json:"userId"`
+	ProductID       uint               `gorm:"index;not null" json:"productId"`
+	PlanCode        string             `gorm:"size:64;index;not null" json:"planCode"`
+	PaymentProvider PaymentProvider    `gorm:"size:32;index;not null" json:"paymentProvider"`
+	Amount          int64              `gorm:"not null" json:"amount"`
+	Currency        string             `gorm:"size:16;not null;default:CNY" json:"currency"`
+	Status          PaymentOrderStatus `gorm:"size:32;index;not null;default:pending" json:"status"`
+	ProviderOrderID *string            `gorm:"size:128" json:"providerOrderId"`
+	ProviderTradeNo *string            `gorm:"size:128" json:"providerTradeNo"`
+	ExpiresAt       *time.Time         `json:"expiresAt"`
+	PaidAt          *time.Time         `json:"paidAt"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	UpdatedAt       time.Time          `json:"updatedAt"`
+}
+
+type PaymentCallback struct {
+	ID              uint            `gorm:"primaryKey" json:"id"`
+	Provider        PaymentProvider `gorm:"size:32;index;not null" json:"provider"`
+	OrderNo         string          `gorm:"size:64;index;not null" json:"orderNo"`
+	ProviderTradeNo string          `gorm:"size:128;index;not null" json:"providerTradeNo"`
+	Payload         datatypes.JSON  `gorm:"type:json" json:"payload"`
+	Status          string          `gorm:"size:32;not null" json:"status"`
+	CreatedAt       time.Time       `json:"createdAt"`
 }
