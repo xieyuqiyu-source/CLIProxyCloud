@@ -513,15 +513,16 @@ func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
 		return fmt.Errorf("plan service is not configured")
 	}
 
+	baseTime := time.Now()
 	if sub, plan, err := s.plan.GetActiveSubscription(order.UserID); err == nil && sub != nil && plan != nil {
-		if strings.EqualFold(plan.PlanCode, order.PlanCode) {
-			return nil
+		if strings.EqualFold(plan.PlanCode, order.PlanCode) && sub.ExpiresAt != nil && sub.ExpiresAt.After(baseTime) {
+			baseTime = *sub.ExpiresAt
 		}
 	}
 
 	var expiresAt *time.Time
 	if order.DurationDays > 0 {
-		next := addPlanDuration(time.Now(), order.DurationDays)
+		next := addPlanDuration(baseTime, order.DurationDays)
 		expiresAt = &next
 	}
 
