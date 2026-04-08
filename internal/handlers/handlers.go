@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -166,7 +167,8 @@ func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 		return
 	}
 
-	order, product, err := h.paymentSvc.CreateOrder(
+	order, product, checkout, err := h.paymentSvc.CreateOrder(
+		c.Request.Context(),
 		user.ID,
 		req.ProductCode,
 		models.PaymentProvider(strings.TrimSpace(strings.ToLower(req.Provider))),
@@ -177,10 +179,9 @@ func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"order":           order,
-		"product":         product,
-		"payment_enabled": false,
-		"message":         "payment provider integration is not connected yet",
+		"order":    order,
+		"product":  product,
+		"checkout": checkout,
 	})
 }
 
@@ -196,7 +197,47 @@ func (h *Handler) GetPaymentOrder(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "payment order access denied"})
 		return
 	}
+	if refreshed, err := h.paymentSvc.RefreshOrderStatus(c.Request.Context(), order); err == nil {
+		order = refreshed
+	}
 	c.JSON(http.StatusOK, gin.H{"order": order})
+}
+
+func (h *Handler) WeChatPaymentNotify(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": "read body failed"})
+		return
+	}
+	headers := map[string]string{}
+	for key, values := range c.Request.Header {
+		if len(values) > 0 {
+			headers[key] = values[0]
+		}
+	}
+	if _, err := h.paymentSvc.HandleWeChatNotify(headers, body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "SUCCESS", "message": "成功"})
+}
+
+func (h *Handler) AlipayPaymentNotify(c *gin.Context) {
+	if err := c.Request.ParseForm(); err != nil {
+		c.String(http.StatusBadRequest, "failure")
+		return
+	}
+	values := map[string]string{}
+	for key, items := range c.Request.PostForm {
+		if len(items) > 0 {
+			values[key] = items[0]
+		}
+	}
+	if _, err := h.paymentSvc.HandleAlipayNotify(values); err != nil {
+		c.String(http.StatusBadRequest, "failure")
+		return
+	}
+	c.String(http.StatusOK, "success")
 }
 
 func (h *Handler) RegisterDevice(c *gin.Context) {

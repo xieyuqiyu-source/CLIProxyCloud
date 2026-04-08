@@ -43,7 +43,10 @@ func main() {
 	deviceSvc := services.NewDeviceService(db)
 	authFileSvc := services.NewAuthFileService(db, storageSvc)
 	appReleaseSvc := services.NewAppReleaseService(cfg.StorageRoot, cfg.PublicBaseURL)
-	paymentSvc := services.NewPaymentService(db)
+	paymentSvc, err := services.NewPaymentService(db, cfg.Payment)
+	if err != nil {
+		log.Fatalf("init payment service: %v", err)
+	}
 	if err := paymentSvc.SeedDefaults(); err != nil {
 		log.Fatalf("seed payment products: %v", err)
 	}

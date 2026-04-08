@@ -184,6 +184,7 @@ type PaymentOrder struct {
 	Status          PaymentOrderStatus `gorm:"size:32;index;not null;default:pending" json:"status"`
 	ProviderOrderID *string            `gorm:"size:128" json:"providerOrderId"`
 	ProviderTradeNo *string            `gorm:"size:128" json:"providerTradeNo"`
+	ProviderPayload datatypes.JSON     `gorm:"type:json" json:"providerPayload"`
 	ExpiresAt       *time.Time         `json:"expiresAt"`
 	PaidAt          *time.Time         `json:"paidAt"`
 	CreatedAt       time.Time          `json:"createdAt"`

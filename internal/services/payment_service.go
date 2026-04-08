@@ -1,12 +1,18 @@
 package services
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/config"
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/models"
+	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/payments"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -23,12 +29,52 @@ type PaymentProductInput struct {
 	Description  string
 }
 
-type PaymentService struct {
-	db *gorm.DB
+type PaymentCheckout struct {
+	Provider        models.PaymentProvider `json:"provider"`
+	PaymentEnabled  bool                   `json:"paymentEnabled"`
+	CodeURL         string                 `json:"codeUrl,omitempty"`
+	ProviderOrderID string                 `json:"providerOrderId,omitempty"`
+	ProviderTradeNo string                 `json:"providerTradeNo,omitempty"`
+	Message         string                 `json:"message,omitempty"`
 }
 
-func NewPaymentService(db *gorm.DB) *PaymentService {
-	return &PaymentService{db: db}
+type PaymentService struct {
+	db     *gorm.DB
+	wechat *payments.WeChatClient
+	alipay *payments.AlipayClient
+	cfg    config.PaymentConfig
+}
+
+func NewPaymentService(db *gorm.DB, cfg config.PaymentConfig) (*PaymentService, error) {
+	wechatClient, err := payments.NewWeChatClient(payments.WeChatConfig{
+		Enabled:          cfg.WeChat.Enabled,
+		AppID:            cfg.WeChat.AppID,
+		MchID:            cfg.WeChat.MchID,
+		SerialNo:         cfg.WeChat.SerialNo,
+		PrivateKeyPEM:    cfg.WeChat.PrivateKeyPEM,
+		PrivateKeyPath:   cfg.WeChat.PrivateKeyPath,
+		APIV3Key:         cfg.WeChat.APIV3Key,
+		NotifyURL:        cfg.WeChat.NotifyURL,
+		Gateway:          cfg.WeChat.Gateway,
+		PlatformCertPEM:  cfg.WeChat.PlatformCertPEM,
+		PlatformSerialNo: cfg.WeChat.PlatformSerialNo,
+	})
+	if err != nil {
+		return nil, err
+	}
+	alipayClient, err := payments.NewAlipayClient(payments.AlipayConfig{
+		Enabled:            cfg.Alipay.Enabled,
+		AppID:              cfg.Alipay.AppID,
+		PrivateKeyPEM:      cfg.Alipay.PrivateKeyPEM,
+		PrivateKeyPath:     cfg.Alipay.PrivateKeyPath,
+		AlipayPublicKeyPEM: cfg.Alipay.AlipayPublicKeyPEM,
+		NotifyURL:          cfg.Alipay.NotifyURL,
+		Gateway:            cfg.Alipay.Gateway,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &PaymentService{db: db, wechat: wechatClient, alipay: alipayClient, cfg: cfg}, nil
 }
 
 func DefaultPaymentProducts() []PaymentProductInput {
@@ -77,10 +123,7 @@ func (s *PaymentService) ListAdminProducts() ([]models.PaymentProduct, error) {
 
 func (s *PaymentService) ListEnabledProducts() ([]models.PaymentProduct, error) {
 	var products []models.PaymentProduct
-	err := s.db.
-		Where("status = ?", models.PaymentProductStatusActive).
-		Order("sort_order asc, id asc").
-		Find(&products).Error
+	err := s.db.Where("status = ?", models.PaymentProductStatusActive).Order("sort_order asc, id asc").Find(&products).Error
 	return products, err
 }
 
@@ -117,17 +160,16 @@ func (s *PaymentService) ListAdminOrders(limit int) ([]models.PaymentOrder, erro
 	return orders, err
 }
 
-func (s *PaymentService) CreateOrder(userID uint, productCode string, provider models.PaymentProvider) (*models.PaymentOrder, *models.PaymentProduct, error) {
+func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCode string, provider models.PaymentProvider) (*models.PaymentOrder, *models.PaymentProduct, *PaymentCheckout, error) {
 	if provider != models.PaymentProviderWeChat && provider != models.PaymentProviderAlipay {
-		return nil, nil, fmt.Errorf("unsupported payment provider")
+		return nil, nil, nil, fmt.Errorf("unsupported payment provider")
 	}
-
 	product, err := s.FindProductByCode(productCode)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if product.Status != models.PaymentProductStatusActive {
-		return nil, nil, fmt.Errorf("payment product is disabled")
+		return nil, nil, nil, fmt.Errorf("payment product is disabled")
 	}
 
 	expiresAt := time.Now().Add(15 * time.Minute)
@@ -143,9 +185,125 @@ func (s *PaymentService) CreateOrder(userID uint, productCode string, provider m
 		ExpiresAt:       &expiresAt,
 	}
 	if err := s.db.Create(order).Error; err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return order, product, nil
+
+	checkout := &PaymentCheckout{
+		Provider:       provider,
+		PaymentEnabled: false,
+		Message:        "payment provider integration is not configured",
+	}
+
+	createReq := payments.CreateOrderRequest{
+		OrderNo:     order.OrderNo,
+		Description: product.DisplayName,
+		Amount:      order.Amount,
+		Currency:    order.Currency,
+		NotifyURL:   s.notifyURLForProvider(provider),
+	}
+
+	switch provider {
+	case models.PaymentProviderWeChat:
+		if s.wechat != nil && s.wechat.Enabled() {
+			result, err := s.wechat.CreateNativeOrder(ctx, createReq)
+			if err != nil {
+				return order, product, nil, err
+			}
+			if err := s.applyCreateResult(order, result); err != nil {
+				return nil, nil, nil, err
+			}
+			checkout = &PaymentCheckout{
+				Provider:        provider,
+				PaymentEnabled:  true,
+				CodeURL:         result.CodeURL,
+				ProviderOrderID: result.ProviderOrderID,
+				ProviderTradeNo: result.ProviderTradeNo,
+				Message:         "wechat native order created",
+			}
+		}
+	case models.PaymentProviderAlipay:
+		if s.alipay != nil && s.alipay.Enabled() {
+			result, err := s.alipay.CreatePrecreateOrder(ctx, createReq)
+			if err != nil {
+				return order, product, nil, err
+			}
+			if err := s.applyCreateResult(order, result); err != nil {
+				return nil, nil, nil, err
+			}
+			checkout = &PaymentCheckout{
+				Provider:        provider,
+				PaymentEnabled:  true,
+				CodeURL:         result.CodeURL,
+				ProviderOrderID: result.ProviderOrderID,
+				ProviderTradeNo: result.ProviderTradeNo,
+				Message:         "alipay precreate order created",
+			}
+		}
+	}
+
+	return order, product, checkout, nil
+}
+
+func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.PaymentOrder) (*models.PaymentOrder, error) {
+	if order == nil {
+		return nil, fmt.Errorf("payment order is nil")
+	}
+	if order.Status == models.PaymentOrderStatusPaid || order.Status == models.PaymentOrderStatusClosed || order.Status == models.PaymentOrderStatusRefunded {
+		return order, nil
+	}
+	var result *payments.QueryOrderResult
+	var err error
+	switch order.PaymentProvider {
+	case models.PaymentProviderWeChat:
+		if s.wechat == nil || !s.wechat.Enabled() {
+			return order, nil
+		}
+		result, err = s.wechat.QueryOrder(ctx, order.OrderNo)
+	case models.PaymentProviderAlipay:
+		if s.alipay == nil || !s.alipay.Enabled() {
+			return order, nil
+		}
+		result, err = s.alipay.QueryOrder(ctx, order.OrderNo)
+	default:
+		return order, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyQueryResult(order, result); err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (s *PaymentService) HandleWeChatNotify(headers map[string]string, body []byte) (*models.PaymentOrder, error) {
+	if s.wechat == nil || !s.wechat.Enabled() {
+		return nil, fmt.Errorf("wechat payment is not enabled")
+	}
+	httpHeaders := make(map[string][]string)
+	for key, value := range headers {
+		httpHeaders[key] = []string{value}
+	}
+	result, err := s.wechat.ParseNotify(http.Header(httpHeaders), body)
+	if err != nil {
+		return nil, err
+	}
+	return s.applyNotifyResult(models.PaymentProviderWeChat, result)
+}
+
+func (s *PaymentService) HandleAlipayNotify(values map[string]string) (*models.PaymentOrder, error) {
+	if s.alipay == nil || !s.alipay.Enabled() {
+		return nil, fmt.Errorf("alipay payment is not enabled")
+	}
+	form := make(map[string][]string)
+	for key, value := range values {
+		form[key] = []string{value}
+	}
+	result, err := s.alipay.ParseNotify(url.Values(form))
+	if err != nil {
+		return nil, err
+	}
+	return s.applyNotifyResult(models.PaymentProviderAlipay, result)
 }
 
 func (s *PaymentService) UpsertProduct(productCode string, input PaymentProductInput) (*models.PaymentProduct, error) {
@@ -157,13 +315,11 @@ func (s *PaymentService) UpsertProduct(productCode string, input PaymentProductI
 	if err := validatePaymentProductInput(input); err != nil {
 		return nil, err
 	}
-
 	var existing models.PaymentProduct
 	err := s.db.Where("product_code = ?", productCode).First(&existing).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
-
 	if err == gorm.ErrRecordNotFound {
 		product := models.PaymentProduct{
 			ProductCode:  input.ProductCode,
@@ -182,7 +338,6 @@ func (s *PaymentService) UpsertProduct(productCode string, input PaymentProductI
 		}
 		return &product, nil
 	}
-
 	existing.Name = strings.TrimSpace(input.Name)
 	existing.DisplayName = strings.TrimSpace(input.DisplayName)
 	existing.PlanCode = strings.TrimSpace(input.PlanCode)
@@ -196,6 +351,88 @@ func (s *PaymentService) UpsertProduct(productCode string, input PaymentProductI
 		return nil, err
 	}
 	return &existing, nil
+}
+
+func (s *PaymentService) applyCreateResult(order *models.PaymentOrder, result *payments.CreateOrderResult) error {
+	if order == nil || result == nil {
+		return nil
+	}
+	if result.ProviderOrderID != "" {
+		order.ProviderOrderID = &result.ProviderOrderID
+	}
+	if result.ProviderTradeNo != "" {
+		order.ProviderTradeNo = &result.ProviderTradeNo
+	}
+	if len(result.Raw) > 0 {
+		order.ProviderPayload = datatypes.JSON(result.Raw)
+	}
+	return s.db.Save(order).Error
+}
+
+func (s *PaymentService) applyQueryResult(order *models.PaymentOrder, result *payments.QueryOrderResult) error {
+	if order == nil || result == nil {
+		return nil
+	}
+	if result.ProviderOrderID != "" {
+		order.ProviderOrderID = &result.ProviderOrderID
+	}
+	if result.ProviderTradeNo != "" {
+		order.ProviderTradeNo = &result.ProviderTradeNo
+	}
+	if len(result.Raw) > 0 {
+		order.ProviderPayload = datatypes.JSON(result.Raw)
+	}
+	order.Status = models.PaymentOrderStatus(result.Status)
+	if result.PaidAt != nil {
+		order.PaidAt = result.PaidAt
+	}
+	return s.db.Save(order).Error
+}
+
+func (s *PaymentService) applyNotifyResult(provider models.PaymentProvider, result *payments.NotifyResult) (*models.PaymentOrder, error) {
+	order, err := s.FindOrderByNo(result.OrderNo)
+	if err != nil {
+		return nil, err
+	}
+	if result.ProviderOrderID != "" {
+		order.ProviderOrderID = &result.ProviderOrderID
+	}
+	if result.ProviderTradeNo != "" {
+		order.ProviderTradeNo = &result.ProviderTradeNo
+	}
+	if result.PaidAt != nil {
+		order.PaidAt = result.PaidAt
+	}
+	order.Status = models.PaymentOrderStatus(result.Status)
+	if len(result.Raw) > 0 {
+		order.ProviderPayload = datatypes.JSON(result.Raw)
+	}
+	if err := s.db.Save(order).Error; err != nil {
+		return nil, err
+	}
+	callbackPayload := datatypes.JSON(result.Raw)
+	callback := models.PaymentCallback{
+		Provider:        provider,
+		OrderNo:         order.OrderNo,
+		ProviderTradeNo: derefString(order.ProviderTradeNo),
+		Payload:         callbackPayload,
+		Status:          string(order.Status),
+	}
+	if err := s.db.Create(&callback).Error; err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {
+	switch provider {
+	case models.PaymentProviderWeChat:
+		return strings.TrimSpace(s.cfg.WeChat.NotifyURL)
+	case models.PaymentProviderAlipay:
+		return strings.TrimSpace(s.cfg.Alipay.NotifyURL)
+	default:
+		return ""
+	}
 }
 
 func normalizeProductCode(value string) string {
@@ -233,14 +470,20 @@ func validatePaymentProductInput(input PaymentProductInput) error {
 	if input.DurationDays <= 0 {
 		return fmt.Errorf("duration_days must be > 0")
 	}
-	if input.Status != "" &&
-		input.Status != models.PaymentProductStatusActive &&
-		input.Status != models.PaymentProductStatusDisabled {
+	if input.Status != "" && input.Status != models.PaymentProductStatusActive && input.Status != models.PaymentProductStatusDisabled {
 		return fmt.Errorf("invalid product status")
 	}
 	return nil
 }
 
 func newOrderNo() string {
-	return "cpo" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	now := time.Now()
+	return "CP" + now.Format("20060102150405") + strconv.FormatInt(now.UnixNano()%1_000_000, 10)
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

@@ -44,6 +44,8 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		auth := v1.Group("/auth")
 		auth.POST("/register", handler.Register)
 		auth.POST("/login", handler.Login)
+		v1.POST("/pay/wechat/notify", handler.WeChatPaymentNotify)
+		v1.POST("/pay/alipay/notify", handler.AlipayPaymentNotify)
 
 		protected := v1.Group("/")
 		protected.Use(authMiddleware.RequireAuth())
