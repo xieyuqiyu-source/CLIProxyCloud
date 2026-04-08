@@ -177,6 +177,11 @@ type PaymentOrder struct {
 	OrderNo         string             `gorm:"size:64;uniqueIndex;not null" json:"orderNo"`
 	UserID          uint               `gorm:"index;not null" json:"userId"`
 	ProductID       uint               `gorm:"index;not null" json:"productId"`
+	ProductCode     string             `gorm:"size:64;index;not null;default:''" json:"productCode"`
+	ProductName     string             `gorm:"size:128;not null;default:''" json:"productName"`
+	ProductDisplay  string             `gorm:"size:128;not null;default:''" json:"productDisplayName"`
+	ProductDesc     string             `gorm:"type:text" json:"productDescription"`
+	DurationDays    int                `gorm:"not null;default:0" json:"durationDays"`
 	PlanCode        string             `gorm:"size:64;index;not null" json:"planCode"`
 	PaymentProvider PaymentProvider    `gorm:"size:32;index;not null" json:"paymentProvider"`
 	Amount          int64              `gorm:"not null" json:"amount"`

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -182,11 +183,22 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		return nil, nil, nil, fmt.Errorf("payment product is disabled")
 	}
 
+	if existing, checkout, err := s.findReusablePendingOrder(userID, product, provider); err != nil {
+		return nil, nil, nil, err
+	} else if existing != nil {
+		return existing, product, checkout, nil
+	}
+
 	expiresAt := time.Now().Add(15 * time.Minute)
 	order := &models.PaymentOrder{
 		OrderNo:         newOrderNo(),
 		UserID:          userID,
 		ProductID:       product.ID,
+		ProductCode:     product.ProductCode,
+		ProductName:     product.Name,
+		ProductDisplay:  product.DisplayName,
+		ProductDesc:     product.Description,
+		DurationDays:    product.DurationDays,
 		PlanCode:        product.PlanCode,
 		PaymentProvider: provider,
 		Amount:          product.PriceAmount,
@@ -252,6 +264,30 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 	}
 
 	return order, product, checkout, nil
+}
+
+func (s *PaymentService) findReusablePendingOrder(userID uint, product *models.PaymentProduct, provider models.PaymentProvider) (*models.PaymentOrder, *PaymentCheckout, error) {
+	if product == nil {
+		return nil, nil, nil
+	}
+
+	now := time.Now()
+	var order models.PaymentOrder
+	err := s.db.
+		Where("user_id = ? AND product_id = ? AND payment_provider = ? AND status = ?", userID, product.ID, provider, models.PaymentOrderStatusPending).
+		Where("expires_at IS NULL OR expires_at > ?", now).
+		Order("id desc").
+		First(&order).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	checkout := s.checkoutFromExistingOrder(&order)
+	checkout.Message = "reused pending payment order"
+	return &order, checkout, nil
 }
 
 func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.PaymentOrder) (*models.PaymentOrder, error) {
@@ -460,24 +496,56 @@ func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
 		return fmt.Errorf("plan service is not configured")
 	}
 
-	var product models.PaymentProduct
-	if err := s.db.First(&product, order.ProductID).Error; err != nil {
-		return err
-	}
-
 	if sub, plan, err := s.plan.GetActiveSubscription(order.UserID); err == nil && sub != nil && plan != nil {
-		if strings.EqualFold(plan.PlanCode, product.PlanCode) {
+		if strings.EqualFold(plan.PlanCode, order.PlanCode) {
 			return nil
 		}
 	}
 
 	var expiresAt *time.Time
-	if product.DurationDays > 0 {
-		next := time.Now().Add(time.Duration(product.DurationDays) * 24 * time.Hour)
+	if order.DurationDays > 0 {
+		next := time.Now().Add(time.Duration(order.DurationDays) * 24 * time.Hour)
 		expiresAt = &next
 	}
 
-	return s.plan.AssignPlan(order.UserID, product.PlanCode, expiresAt)
+	return s.plan.AssignPlan(order.UserID, order.PlanCode, expiresAt)
+}
+
+func (s *PaymentService) checkoutFromExistingOrder(order *models.PaymentOrder) *PaymentCheckout {
+	checkout := &PaymentCheckout{
+		Provider:       order.PaymentProvider,
+		PaymentEnabled: true,
+	}
+	if order.ProviderOrderID != nil {
+		checkout.ProviderOrderID = derefString(order.ProviderOrderID)
+	}
+	if order.ProviderTradeNo != nil {
+		checkout.ProviderTradeNo = derefString(order.ProviderTradeNo)
+	}
+	if len(order.ProviderPayload) == 0 {
+		return checkout
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(order.ProviderPayload, &payload); err != nil {
+		return checkout
+	}
+	switch order.PaymentProvider {
+	case models.PaymentProviderWeChat:
+		if codeURL, ok := payload["code_url"].(string); ok {
+			checkout.CodeURL = strings.TrimSpace(codeURL)
+		}
+	case models.PaymentProviderAlipay:
+		if nested, ok := payload["alipay_trade_precreate_response"].(map[string]any); ok {
+			if codeURL, ok := nested["qr_code"].(string); ok {
+				checkout.CodeURL = strings.TrimSpace(codeURL)
+			}
+			if tradeNo, ok := nested["trade_no"].(string); ok {
+				checkout.ProviderTradeNo = strings.TrimSpace(tradeNo)
+			}
+		}
+	}
+	return checkout
 }
 
 func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {
