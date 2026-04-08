@@ -75,6 +75,14 @@ const (
 	PaymentOrderStatusRefunded PaymentOrderStatus = "refunded"
 )
 
+type PaymentPurchaseMode string
+
+const (
+	PaymentPurchaseModeStandard            PaymentPurchaseMode = "standard"
+	PaymentPurchaseModeUpgradeDiffAll      PaymentPurchaseMode = "upgrade_diff_all"
+	PaymentPurchaseModeUpgradeReplaceMonth PaymentPurchaseMode = "upgrade_replace_month"
+)
+
 type User struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Email        string    `gorm:"size:190;uniqueIndex;not null" json:"email"`
@@ -181,6 +189,8 @@ type PaymentOrder struct {
 	ProductName     string             `gorm:"size:128;not null;default:''" json:"productName"`
 	ProductDisplay  string             `gorm:"size:128;not null;default:''" json:"productDisplayName"`
 	ProductDesc     string             `gorm:"type:text" json:"productDescription"`
+	PurchaseMode    PaymentPurchaseMode `gorm:"size:64;not null;default:standard" json:"purchaseMode"`
+	BillingMonths   int                `gorm:"not null;default:1" json:"billingMonths"`
 	DurationDays    int                `gorm:"not null;default:0" json:"durationDays"`
 	PlanCode        string             `gorm:"size:64;index;not null" json:"planCode"`
 	PaymentProvider PaymentProvider    `gorm:"size:32;index;not null" json:"paymentProvider"`

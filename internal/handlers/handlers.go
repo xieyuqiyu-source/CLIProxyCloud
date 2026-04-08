@@ -156,11 +156,32 @@ func (h *Handler) ListPaymentProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
+func (h *Handler) QuotePaymentOrder(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	var req struct {
+		ProductCode   string `json:"product_code"`
+		BillingMonths int    `json:"billing_months"`
+		PurchaseMode  string `json:"purchase_mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	product, quote, err := h.paymentSvc.QuoteOrder(user.ID, req.ProductCode, req.BillingMonths, models.PaymentPurchaseMode(strings.TrimSpace(strings.ToLower(req.PurchaseMode))))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"product": product, "quote": quote})
+}
+
 func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	var req struct {
-		ProductCode string `json:"product_code"`
-		Provider    string `json:"provider"`
+		ProductCode   string `json:"product_code"`
+		Provider      string `json:"provider"`
+		BillingMonths int    `json:"billing_months"`
+		PurchaseMode  string `json:"purchase_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -172,6 +193,8 @@ func (h *Handler) CreatePaymentOrder(c *gin.Context) {
 		user.ID,
 		req.ProductCode,
 		models.PaymentProvider(strings.TrimSpace(strings.ToLower(req.Provider))),
+		req.BillingMonths,
+		models.PaymentPurchaseMode(strings.TrimSpace(strings.ToLower(req.PurchaseMode))),
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

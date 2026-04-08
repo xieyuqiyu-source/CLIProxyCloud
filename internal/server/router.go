@@ -54,6 +54,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		protected.GET("/me/plan", handler.MyPlan)
 		protected.GET("/me/features", handler.MyFeatures)
 		protected.GET("/pay/products", handler.ListPaymentProducts)
+		protected.POST("/pay/quote", handler.QuotePaymentOrder)
 		protected.POST("/pay/orders", handler.CreatePaymentOrder)
 		protected.GET("/pay/orders/:orderNo", handler.GetPaymentOrder)
 		protected.POST("/devices/register", handler.RegisterDevice)

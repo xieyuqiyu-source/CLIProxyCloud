@@ -39,6 +39,21 @@ type PaymentCheckout struct {
 	Message         string                 `json:"message,omitempty"`
 }
 
+type PaymentQuote struct {
+	ProductCode        string                     `json:"productCode"`
+	ProductDisplayName string                     `json:"productDisplayName"`
+	PlanCode           string                     `json:"planCode"`
+	PurchaseMode       models.PaymentPurchaseMode `json:"purchaseMode"`
+	BillingMonths      int                        `json:"billingMonths"`
+	Amount             int64                      `json:"amount"`
+	Currency           string                     `json:"currency"`
+	DurationDays       int                        `json:"durationDays"`
+	Title              string                     `json:"title"`
+	Description        string                     `json:"description"`
+	Allowed            bool                       `json:"allowed"`
+	Reason             string                     `json:"reason,omitempty"`
+}
+
 type PaymentService struct {
 	db     *gorm.DB
 	plan   *PlanService
@@ -138,6 +153,104 @@ func (s *PaymentService) ListEnabledProducts() ([]models.PaymentProduct, error) 
 	return products, err
 }
 
+func (s *PaymentService) QuoteOrder(userID uint, productCode string, billingMonths int, purchaseMode models.PaymentPurchaseMode) (*models.PaymentProduct, *PaymentQuote, error) {
+	product, err := s.FindProductByCode(productCode)
+	if err != nil {
+		return nil, nil, err
+	}
+	if product.Status != models.PaymentProductStatusActive {
+		return nil, nil, fmt.Errorf("payment product is disabled")
+	}
+
+	purchaseMode = normalizePurchaseMode(purchaseMode)
+	billingMonths = normalizeBillingMonths(billingMonths)
+
+	var (
+		activeSub  *models.UserSubscription
+		activePlan *models.Plan
+	)
+	if s.plan != nil {
+		if sub, plan, err := s.plan.GetActiveSubscription(userID); err == nil {
+			activeSub = sub
+			activePlan = plan
+		} else if err != gorm.ErrRecordNotFound {
+			return nil, nil, err
+		}
+	}
+
+	currentPlanCode := "free"
+	if activePlan != nil {
+		currentPlanCode = strings.TrimSpace(strings.ToLower(activePlan.PlanCode))
+	}
+	targetPlanCode := strings.TrimSpace(strings.ToLower(product.PlanCode))
+	quote := &PaymentQuote{
+		ProductCode:        product.ProductCode,
+		ProductDisplayName: product.DisplayName,
+		PlanCode:           product.PlanCode,
+		PurchaseMode:       purchaseMode,
+		BillingMonths:      billingMonths,
+		Currency:           product.Currency,
+		Allowed:            true,
+	}
+
+	switch purchaseMode {
+	case models.PaymentPurchaseModeUpgradeDiffAll:
+		if currentPlanCode != "vip1" || targetPlanCode != "vip2" {
+			return nil, nil, fmt.Errorf("upgrade diff mode is only available when upgrading Pro to Pro Max")
+		}
+		if activeSub == nil || activeSub.ExpiresAt == nil || !activeSub.ExpiresAt.After(time.Now()) {
+			return nil, nil, fmt.Errorf("current Pro subscription is not active")
+		}
+		baseProduct, err := s.FindProductByCode("pro_monthly")
+		if err != nil {
+			return nil, nil, err
+		}
+		targetMonthly, err := s.FindProductByCode("pro_max_monthly")
+		if err != nil {
+			return nil, nil, err
+		}
+		remainingMonths := remainingBillingMonths(time.Now(), *activeSub.ExpiresAt)
+		if remainingMonths <= 0 {
+			return nil, nil, fmt.Errorf("remaining Pro duration is less than one billable month")
+		}
+		diffAmount := targetMonthly.PriceAmount - baseProduct.PriceAmount
+		if diffAmount <= 0 {
+			return nil, nil, fmt.Errorf("Pro Max monthly price must be higher than Pro monthly price")
+		}
+		quote.PurchaseMode = models.PaymentPurchaseModeUpgradeDiffAll
+		quote.BillingMonths = remainingMonths
+		quote.Amount = diffAmount * int64(remainingMonths)
+		quote.DurationDays = 0
+		quote.Title = fmt.Sprintf("Pro Max 补差价升级（%d 个月）", remainingMonths)
+		quote.Description = fmt.Sprintf("按剩余 %d 个月补差价，升级成功后将当前 Pro 直接升级为 Pro Max，到期时间保持不变。", remainingMonths)
+		return product, quote, nil
+	case models.PaymentPurchaseModeUpgradeReplaceMonth:
+		if currentPlanCode != "vip1" || targetPlanCode != "vip2" {
+			return nil, nil, fmt.Errorf("replacement upgrade is only available when upgrading Pro to Pro Max")
+		}
+		quote.PurchaseMode = models.PaymentPurchaseModeUpgradeReplaceMonth
+		quote.BillingMonths = 1
+		quote.Amount = product.PriceAmount
+		quote.DurationDays = 30
+		quote.Title = "Pro Max 重新开通 1 个月"
+		quote.Description = "当前 Pro 剩余时长将失效，并从支付成功时起重新开通 1 个月 Pro Max。"
+		return product, quote, nil
+	default:
+		if currentPlanCode == "vip2" && targetPlanCode == "vip1" {
+			return nil, nil, fmt.Errorf("Pro Max cannot be downgraded to Pro")
+		}
+		if currentPlanCode == "vip1" && targetPlanCode == "vip2" {
+			return nil, nil, fmt.Errorf("please choose an upgrade mode to switch from Pro to Pro Max")
+		}
+		quote.PurchaseMode = models.PaymentPurchaseModeStandard
+		quote.Amount = discountedAmount(product.PriceAmount, billingMonths)
+		quote.DurationDays = billingMonths * 30
+		quote.Title = fmt.Sprintf("%s%s", product.DisplayName, billingLabelSuffix(billingMonths))
+		quote.Description = discountedDescription(product.Description, billingMonths)
+		return product, quote, nil
+	}
+}
+
 func (s *PaymentService) FindProductByID(id uint) (*models.PaymentProduct, error) {
 	var product models.PaymentProduct
 	if err := s.db.First(&product, id).Error; err != nil {
@@ -187,19 +300,16 @@ func (s *PaymentService) ListAdminOrders(limit int, status string, query string)
 	return orders, err
 }
 
-func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCode string, provider models.PaymentProvider) (*models.PaymentOrder, *models.PaymentProduct, *PaymentCheckout, error) {
+func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCode string, provider models.PaymentProvider, billingMonths int, purchaseMode models.PaymentPurchaseMode) (*models.PaymentOrder, *models.PaymentProduct, *PaymentCheckout, error) {
 	if provider != models.PaymentProviderWeChat && provider != models.PaymentProviderAlipay {
 		return nil, nil, nil, fmt.Errorf("unsupported payment provider")
 	}
-	product, err := s.FindProductByCode(productCode)
+	product, quote, err := s.QuoteOrder(userID, productCode, billingMonths, purchaseMode)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if product.Status != models.PaymentProductStatusActive {
-		return nil, nil, nil, fmt.Errorf("payment product is disabled")
-	}
 
-	if existing, checkout, err := s.findReusablePendingOrder(userID, product, provider); err != nil {
+	if existing, checkout, err := s.findReusablePendingOrder(userID, product, provider, quote); err != nil {
 		return nil, nil, nil, err
 	} else if existing != nil {
 		return existing, product, checkout, nil
@@ -212,13 +322,15 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		ProductID:       product.ID,
 		ProductCode:     product.ProductCode,
 		ProductName:     product.Name,
-		ProductDisplay:  product.DisplayName,
-		ProductDesc:     product.Description,
-		DurationDays:    product.DurationDays,
+		ProductDisplay:  quote.Title,
+		ProductDesc:     quote.Description,
+		PurchaseMode:    quote.PurchaseMode,
+		BillingMonths:   quote.BillingMonths,
+		DurationDays:    quote.DurationDays,
 		PlanCode:        product.PlanCode,
 		PaymentProvider: provider,
-		Amount:          product.PriceAmount,
-		Currency:        product.Currency,
+		Amount:          quote.Amount,
+		Currency:        quote.Currency,
 		Status:          models.PaymentOrderStatusPending,
 		ExpiresAt:       &expiresAt,
 	}
@@ -234,7 +346,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 
 	createReq := payments.CreateOrderRequest{
 		OrderNo:     order.OrderNo,
-		Description: product.DisplayName,
+		Description: quote.Title,
 		Amount:      order.Amount,
 		Currency:    order.Currency,
 		NotifyURL:   s.notifyURLForProvider(provider),
@@ -283,7 +395,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 	return order, product, checkout, nil
 }
 
-func (s *PaymentService) findReusablePendingOrder(userID uint, product *models.PaymentProduct, provider models.PaymentProvider) (*models.PaymentOrder, *PaymentCheckout, error) {
+func (s *PaymentService) findReusablePendingOrder(userID uint, product *models.PaymentProduct, provider models.PaymentProvider, quote *PaymentQuote) (*models.PaymentOrder, *PaymentCheckout, error) {
 	if product == nil {
 		return nil, nil, nil
 	}
@@ -291,7 +403,7 @@ func (s *PaymentService) findReusablePendingOrder(userID uint, product *models.P
 	now := time.Now()
 	var order models.PaymentOrder
 	err := s.db.
-		Where("user_id = ? AND product_id = ? AND payment_provider = ? AND status = ?", userID, product.ID, provider, models.PaymentOrderStatusPending).
+		Where("user_id = ? AND product_id = ? AND payment_provider = ? AND status = ? AND purchase_mode = ? AND billing_months = ?", userID, product.ID, provider, models.PaymentOrderStatusPending, quote.PurchaseMode, quote.BillingMonths).
 		Where("expires_at IS NULL OR expires_at > ?", now).
 		Order("id desc").
 		First(&order).Error
@@ -513,17 +625,38 @@ func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
 		return fmt.Errorf("plan service is not configured")
 	}
 
-	baseTime := time.Now()
+	now := time.Now()
+	baseTime := now
+	var (
+		currentSub  *models.UserSubscription
+		currentPlan *models.Plan
+	)
 	if sub, plan, err := s.plan.GetActiveSubscription(order.UserID); err == nil && sub != nil && plan != nil {
+		currentSub = sub
+		currentPlan = plan
 		if strings.EqualFold(plan.PlanCode, order.PlanCode) && sub.ExpiresAt != nil && sub.ExpiresAt.After(baseTime) {
 			baseTime = *sub.ExpiresAt
 		}
 	}
 
 	var expiresAt *time.Time
-	if order.DurationDays > 0 {
-		next := addPlanDuration(baseTime, order.DurationDays)
+	switch order.PurchaseMode {
+	case models.PaymentPurchaseModeUpgradeDiffAll:
+		if currentSub == nil || currentPlan == nil || !strings.EqualFold(currentPlan.PlanCode, "vip1") || order.PlanCode != "vip2" {
+			return fmt.Errorf("upgrade diff grant requires an active Pro subscription")
+		}
+		if currentSub.ExpiresAt != nil && currentSub.ExpiresAt.After(now) {
+			next := *currentSub.ExpiresAt
+			expiresAt = &next
+		}
+	case models.PaymentPurchaseModeUpgradeReplaceMonth:
+		next := addPlanDuration(now, 30)
 		expiresAt = &next
+	default:
+		if order.DurationDays > 0 {
+			next := addPlanDuration(baseTime, order.DurationDays)
+			expiresAt = &next
+		}
 	}
 
 	return s.plan.AssignPlan(order.UserID, order.PlanCode, expiresAt)
@@ -588,6 +721,70 @@ func addPlanDuration(start time.Time, durationDays int) time.Time {
 		return start.AddDate(0, durationDays/30, 0)
 	}
 	return start.Add(time.Duration(durationDays) * 24 * time.Hour)
+}
+
+func discountedAmount(monthlyAmount int64, billingMonths int) int64 {
+	switch billingMonths {
+	case 6:
+		return int64(float64(monthlyAmount*6) * 0.9)
+	case 12:
+		return int64(float64(monthlyAmount*12) * 0.7)
+	default:
+		return monthlyAmount
+	}
+}
+
+func normalizeBillingMonths(value int) int {
+	switch value {
+	case 6, 12:
+		return value
+	default:
+		return 1
+	}
+}
+
+func normalizePurchaseMode(value models.PaymentPurchaseMode) models.PaymentPurchaseMode {
+	switch value {
+	case models.PaymentPurchaseModeUpgradeDiffAll, models.PaymentPurchaseModeUpgradeReplaceMonth:
+		return value
+	default:
+		return models.PaymentPurchaseModeStandard
+	}
+}
+
+func billingLabelSuffix(months int) string {
+	switch months {
+	case 6:
+		return "（半年付）"
+	case 12:
+		return "（年付）"
+	default:
+		return "（月付）"
+	}
+}
+
+func discountedDescription(base string, months int) string {
+	switch months {
+	case 6:
+		return strings.TrimSpace(base + " 半年付享 9 折。")
+	case 12:
+		return strings.TrimSpace(base + " 年付享 7 折。")
+	default:
+		return base
+	}
+}
+
+func remainingBillingMonths(now time.Time, expiresAt time.Time) int {
+	if !expiresAt.After(now) {
+		return 0
+	}
+	count := 0
+	cursor := now
+	for cursor.Before(expiresAt) {
+		count++
+		cursor = cursor.AddDate(0, 1, 0)
+	}
+	return count
 }
 
 func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {
