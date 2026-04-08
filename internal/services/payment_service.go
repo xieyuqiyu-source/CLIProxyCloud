@@ -40,12 +40,13 @@ type PaymentCheckout struct {
 
 type PaymentService struct {
 	db     *gorm.DB
+	plan   *PlanService
 	wechat *payments.WeChatClient
 	alipay *payments.AlipayClient
 	cfg    config.PaymentConfig
 }
 
-func NewPaymentService(db *gorm.DB, cfg config.PaymentConfig) (*PaymentService, error) {
+func NewPaymentService(db *gorm.DB, planSvc *PlanService, cfg config.PaymentConfig) (*PaymentService, error) {
 	wechatClient, err := payments.NewWeChatClient(payments.WeChatConfig{
 		Enabled:          cfg.WeChat.Enabled,
 		AppID:            cfg.WeChat.AppID,
@@ -74,7 +75,7 @@ func NewPaymentService(db *gorm.DB, cfg config.PaymentConfig) (*PaymentService, 
 	if err != nil {
 		return nil, err
 	}
-	return &PaymentService{db: db, wechat: wechatClient, alipay: alipayClient, cfg: cfg}, nil
+	return &PaymentService{db: db, plan: planSvc, wechat: wechatClient, alipay: alipayClient, cfg: cfg}, nil
 }
 
 func DefaultPaymentProducts() []PaymentProductInput {
@@ -249,6 +250,11 @@ func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.P
 		return nil, fmt.Errorf("payment order is nil")
 	}
 	if order.Status == models.PaymentOrderStatusPaid || order.Status == models.PaymentOrderStatusClosed || order.Status == models.PaymentOrderStatusRefunded {
+		if order.Status == models.PaymentOrderStatusPaid {
+			if err := s.grantPlanIfPaid(order); err != nil {
+				return nil, err
+			}
+		}
 		return order, nil
 	}
 	var result *payments.QueryOrderResult
@@ -373,6 +379,7 @@ func (s *PaymentService) applyQueryResult(order *models.PaymentOrder, result *pa
 	if order == nil || result == nil {
 		return nil
 	}
+	wasPaid := order.Status == models.PaymentOrderStatusPaid
 	if result.ProviderOrderID != "" {
 		order.ProviderOrderID = &result.ProviderOrderID
 	}
@@ -386,7 +393,13 @@ func (s *PaymentService) applyQueryResult(order *models.PaymentOrder, result *pa
 	if result.PaidAt != nil {
 		order.PaidAt = result.PaidAt
 	}
-	return s.db.Save(order).Error
+	if err := s.db.Save(order).Error; err != nil {
+		return err
+	}
+	if !wasPaid && order.Status == models.PaymentOrderStatusPaid {
+		return s.grantPlanIfPaid(order)
+	}
+	return nil
 }
 
 func (s *PaymentService) applyNotifyResult(provider models.PaymentProvider, result *payments.NotifyResult) (*models.PaymentOrder, error) {
@@ -394,6 +407,7 @@ func (s *PaymentService) applyNotifyResult(provider models.PaymentProvider, resu
 	if err != nil {
 		return nil, err
 	}
+	wasPaid := order.Status == models.PaymentOrderStatusPaid
 	if result.ProviderOrderID != "" {
 		order.ProviderOrderID = &result.ProviderOrderID
 	}
@@ -421,7 +435,40 @@ func (s *PaymentService) applyNotifyResult(provider models.PaymentProvider, resu
 	if err := s.db.Create(&callback).Error; err != nil {
 		return nil, err
 	}
+	if !wasPaid && order.Status == models.PaymentOrderStatusPaid {
+		if err := s.grantPlanIfPaid(order); err != nil {
+			return nil, err
+		}
+	}
 	return order, nil
+}
+
+func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
+	if order == nil || order.Status != models.PaymentOrderStatusPaid {
+		return nil
+	}
+	if s.plan == nil {
+		return fmt.Errorf("plan service is not configured")
+	}
+
+	var product models.PaymentProduct
+	if err := s.db.First(&product, order.ProductID).Error; err != nil {
+		return err
+	}
+
+	if sub, plan, err := s.plan.GetActiveSubscription(order.UserID); err == nil && sub != nil && plan != nil {
+		if strings.EqualFold(plan.PlanCode, product.PlanCode) {
+			return nil
+		}
+	}
+
+	var expiresAt *time.Time
+	if product.DurationDays > 0 {
+		next := time.Now().Add(time.Duration(product.DurationDays) * 24 * time.Hour)
+		expiresAt = &next
+	}
+
+	return s.plan.AssignPlan(order.UserID, product.PlanCode, expiresAt)
 }
 
 func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {

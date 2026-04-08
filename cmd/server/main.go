@@ -43,7 +43,7 @@ func main() {
 	deviceSvc := services.NewDeviceService(db)
 	authFileSvc := services.NewAuthFileService(db, storageSvc)
 	appReleaseSvc := services.NewAppReleaseService(cfg.StorageRoot, cfg.PublicBaseURL)
-	paymentSvc, err := services.NewPaymentService(db, cfg.Payment)
+	paymentSvc, err := services.NewPaymentService(db, planSvc, cfg.Payment)
 	if err != nil {
 		log.Fatalf("init payment service: %v", err)
 	}
