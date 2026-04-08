@@ -15,6 +15,7 @@ import (
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/payments"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type PaymentProductInput struct {
@@ -424,7 +425,7 @@ func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.P
 		return nil, fmt.Errorf("payment order is nil")
 	}
 	if order.Status == models.PaymentOrderStatusPaid || order.Status == models.PaymentOrderStatusClosed || order.Status == models.PaymentOrderStatusRefunded {
-		if order.Status == models.PaymentOrderStatusPaid {
+		if order.Status == models.PaymentOrderStatusPaid && order.GrantedAt == nil {
 			if err := s.grantPlanIfPaid(order); err != nil {
 				return nil, err
 			}
@@ -618,48 +619,73 @@ func (s *PaymentService) applyNotifyResult(provider models.PaymentProvider, resu
 }
 
 func (s *PaymentService) grantPlanIfPaid(order *models.PaymentOrder) error {
-	if order == nil || order.Status != models.PaymentOrderStatusPaid {
+	return s.grantPlan(order, false)
+}
+
+func (s *PaymentService) grantPlan(order *models.PaymentOrder, force bool) error {
+	if order == nil {
 		return nil
 	}
 	if s.plan == nil {
 		return fmt.Errorf("plan service is not configured")
 	}
 
-	now := time.Now()
-	baseTime := now
-	var (
-		currentSub  *models.UserSubscription
-		currentPlan *models.Plan
-	)
-	if sub, plan, err := s.plan.GetActiveSubscription(order.UserID); err == nil && sub != nil && plan != nil {
-		currentSub = sub
-		currentPlan = plan
-		if strings.EqualFold(plan.PlanCode, order.PlanCode) && sub.ExpiresAt != nil && sub.ExpiresAt.After(baseTime) {
-			baseTime = *sub.ExpiresAt
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var locked models.PaymentOrder
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, order.ID).Error; err != nil {
+			return err
 		}
-	}
+		if locked.Status != models.PaymentOrderStatusPaid {
+			return nil
+		}
+		if locked.GrantedAt != nil && !force {
+			return nil
+		}
 
-	var expiresAt *time.Time
-	switch order.PurchaseMode {
-	case models.PaymentPurchaseModeUpgradeDiffAll:
-		if currentSub == nil || currentPlan == nil || !strings.EqualFold(currentPlan.PlanCode, "vip1") || order.PlanCode != "vip2" {
-			return fmt.Errorf("upgrade diff grant requires an active Pro subscription")
+		planSvc := NewPlanService(tx)
+		now := time.Now()
+		baseTime := now
+		var (
+			currentSub  *models.UserSubscription
+			currentPlan *models.Plan
+		)
+		if sub, plan, err := planSvc.GetActiveSubscription(locked.UserID); err == nil && sub != nil && plan != nil {
+			currentSub = sub
+			currentPlan = plan
+			if strings.EqualFold(plan.PlanCode, locked.PlanCode) && sub.ExpiresAt != nil && sub.ExpiresAt.After(baseTime) {
+				baseTime = *sub.ExpiresAt
+			}
 		}
-		if currentSub.ExpiresAt != nil && currentSub.ExpiresAt.After(now) {
-			next := *currentSub.ExpiresAt
-			expiresAt = &next
-		}
-	case models.PaymentPurchaseModeUpgradeReplaceMonth:
-		next := addPlanDuration(now, 30)
-		expiresAt = &next
-	default:
-		if order.DurationDays > 0 {
-			next := addPlanDuration(baseTime, order.DurationDays)
-			expiresAt = &next
-		}
-	}
 
-	return s.plan.AssignPlan(order.UserID, order.PlanCode, expiresAt)
+		var expiresAt *time.Time
+		switch locked.PurchaseMode {
+		case models.PaymentPurchaseModeUpgradeDiffAll:
+			if currentSub == nil || currentPlan == nil || !strings.EqualFold(currentPlan.PlanCode, "vip1") || locked.PlanCode != "vip2" {
+				return fmt.Errorf("upgrade diff grant requires an active Pro subscription")
+			}
+			if currentSub.ExpiresAt != nil && currentSub.ExpiresAt.After(now) {
+				next := *currentSub.ExpiresAt
+				expiresAt = &next
+			}
+		case models.PaymentPurchaseModeUpgradeReplaceMonth:
+			next := addPlanDuration(now, 30)
+			expiresAt = &next
+		default:
+			if locked.DurationDays > 0 {
+				next := addPlanDuration(baseTime, locked.DurationDays)
+				expiresAt = &next
+			}
+		}
+
+		if err := planSvc.AssignPlan(locked.UserID, locked.PlanCode, expiresAt); err != nil {
+			return err
+		}
+		nowGranted := time.Now()
+		if err := tx.Model(&locked).Update("granted_at", &nowGranted).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *PaymentService) RegrantOrder(orderNo string) (*models.PaymentOrder, error) {
@@ -670,7 +696,7 @@ func (s *PaymentService) RegrantOrder(orderNo string) (*models.PaymentOrder, err
 	if order.Status != models.PaymentOrderStatusPaid {
 		return nil, fmt.Errorf("only paid orders can be regranted")
 	}
-	if err := s.grantPlanIfPaid(order); err != nil {
+	if err := s.grantPlan(order, true); err != nil {
 		return nil, err
 	}
 	return order, nil

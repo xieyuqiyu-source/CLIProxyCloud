@@ -202,6 +202,7 @@ type PaymentOrder struct {
 	ProviderPayload datatypes.JSON     `gorm:"type:json" json:"providerPayload"`
 	ExpiresAt       *time.Time         `json:"expiresAt"`
 	PaidAt          *time.Time         `json:"paidAt"`
+	GrantedAt       *time.Time         `json:"grantedAt"`
 	CreatedAt       time.Time          `json:"createdAt"`
 	UpdatedAt       time.Time          `json:"updatedAt"`
 }
