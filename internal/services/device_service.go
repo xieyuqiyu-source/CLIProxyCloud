@@ -20,13 +20,13 @@ func (s *DeviceService) RegisterOrTouch(user *models.User, features FeatureFlags
 	if deviceID == "" {
 		return nil, fmt.Errorf("device_id is required")
 	}
+	_ = features
 
 	var device models.Device
 	err := s.db.Where("device_id = ?", deviceID).First(&device).Error
 	if err == nil {
-		if device.UserID != user.ID && user.Role != models.UserRoleAdmin {
-			return nil, fmt.Errorf("device already belongs to another user")
-		}
+		device.UserID = user.ID
+		device.Status = models.DeviceStatusActive
 		device.DeviceName = deviceName
 		device.Platform = platform
 		device.LastSeenAt = time.Now()
@@ -37,16 +37,6 @@ func (s *DeviceService) RegisterOrTouch(user *models.User, features FeatureFlags
 	}
 	if err != gorm.ErrRecordNotFound {
 		return nil, err
-	}
-
-	if user.Role != models.UserRoleAdmin {
-		var count int64
-		if err := s.db.Model(&models.Device{}).Where("user_id = ? AND status = ?", user.ID, models.DeviceStatusActive).Count(&count).Error; err != nil {
-			return nil, err
-		}
-		if int(count) >= features.MaxDevices {
-			return nil, fmt.Errorf("device limit exceeded")
-		}
 	}
 
 	device = models.Device{
