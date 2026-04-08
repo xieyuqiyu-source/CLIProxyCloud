@@ -109,7 +109,16 @@ func DefaultPaymentProducts() []PaymentProductInput {
 
 func (s *PaymentService) SeedDefaults() error {
 	for _, product := range DefaultPaymentProducts() {
-		if _, err := s.UpsertProduct(product.ProductCode, product); err != nil {
+		productCode := normalizeProductCode(product.ProductCode)
+		var existing models.PaymentProduct
+		err := s.db.Where("product_code = ?", productCode).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if _, err := s.UpsertProduct(productCode, product); err != nil {
 			return err
 		}
 	}
