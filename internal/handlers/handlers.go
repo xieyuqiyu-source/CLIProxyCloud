@@ -82,6 +82,12 @@ func (h *Handler) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	var expiresAt *time.Time
+	if user.Role != models.UserRoleAdmin {
+		if sub, _, err := h.planSvc.GetActiveSubscription(user.ID); err == nil && sub != nil {
+			expiresAt = sub.ExpiresAt
+		}
+	}
 	device, err := h.deviceSvc.RegisterOrTouch(user, features, req.DeviceID, req.DeviceName, req.Platform)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -92,6 +98,7 @@ func (h *Handler) Login(c *gin.Context) {
 		"user":     user,
 		"plan":     plan,
 		"features": features,
+		"expiresAt": expiresAt,
 		"device":   device,
 	})
 }
@@ -103,10 +110,17 @@ func (h *Handler) Me(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	var expiresAt *time.Time
+	if user.Role != models.UserRoleAdmin {
+		if sub, _, err := h.planSvc.GetActiveSubscription(user.ID); err == nil && sub != nil {
+			expiresAt = sub.ExpiresAt
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"user":     user,
 		"plan":     plan,
 		"features": features,
+		"expiresAt": expiresAt,
 	})
 }
 
