@@ -457,6 +457,25 @@ func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.P
 	return order, nil
 }
 
+func (s *PaymentService) CancelPendingOrder(order *models.PaymentOrder) (*models.PaymentOrder, error) {
+	if order == nil {
+		return nil, fmt.Errorf("payment order is nil")
+	}
+	if order.Status != models.PaymentOrderStatusPending {
+		return nil, fmt.Errorf("only pending orders can be canceled")
+	}
+	now := time.Now()
+	if err := s.db.Model(order).Updates(map[string]any{
+		"status":     models.PaymentOrderStatusClosed,
+		"expires_at": &now,
+	}).Error; err != nil {
+		return nil, err
+	}
+	order.Status = models.PaymentOrderStatusClosed
+	order.ExpiresAt = &now
+	return order, nil
+}
+
 func (s *PaymentService) HandleWeChatNotify(headers map[string]string, body []byte) (*models.PaymentOrder, error) {
 	if s.wechat == nil || !s.wechat.Enabled() {
 		return nil, fmt.Errorf("wechat payment is not enabled")

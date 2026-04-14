@@ -240,6 +240,26 @@ func (h *Handler) GetPaymentOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"order": order})
 }
 
+func (h *Handler) CancelPaymentOrder(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	orderNo := strings.TrimSpace(c.Param("orderNo"))
+	order, err := h.paymentSvc.FindOrderByNo(orderNo)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "payment order not found"})
+		return
+	}
+	if user.Role != models.UserRoleAdmin && order.UserID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "payment order access denied"})
+		return
+	}
+	order, err = h.paymentSvc.CancelPendingOrder(order)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"order": order})
+}
+
 func (h *Handler) WeChatPaymentNotify(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
