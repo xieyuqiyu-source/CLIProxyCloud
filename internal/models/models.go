@@ -180,30 +180,33 @@ type PaymentProduct struct {
 }
 
 type PaymentOrder struct {
-	ID              uint               `gorm:"primaryKey" json:"id"`
-	OrderNo         string             `gorm:"size:64;uniqueIndex;not null" json:"orderNo"`
-	UserID          uint               `gorm:"index;not null" json:"userId"`
-	ProductID       uint               `gorm:"index;not null" json:"productId"`
-	ProductCode     string             `gorm:"size:64;index;not null;default:''" json:"productCode"`
-	ProductName     string             `gorm:"size:128;not null;default:''" json:"productName"`
-	ProductDisplay  string             `gorm:"size:128;not null;default:''" json:"productDisplayName"`
-	ProductDesc     string             `gorm:"type:text" json:"productDescription"`
+	ID              uint                `gorm:"primaryKey" json:"id"`
+	OrderNo         string              `gorm:"size:64;uniqueIndex;not null" json:"orderNo"`
+	UserID          uint                `gorm:"index;not null" json:"userId"`
+	ProductID       uint                `gorm:"index;not null" json:"productId"`
+	ProductCode     string              `gorm:"size:64;index;not null;default:''" json:"productCode"`
+	ProductName     string              `gorm:"size:128;not null;default:''" json:"productName"`
+	ProductDisplay  string              `gorm:"size:128;not null;default:''" json:"productDisplayName"`
+	ProductDesc     string              `gorm:"type:text" json:"productDescription"`
 	PurchaseMode    PaymentPurchaseMode `gorm:"size:64;not null;default:standard" json:"purchaseMode"`
-	BillingMonths   int                `gorm:"not null;default:1" json:"billingMonths"`
-	DurationDays    int                `gorm:"not null;default:0" json:"durationDays"`
-	PlanCode        string             `gorm:"size:64;index;not null" json:"planCode"`
-	PaymentProvider PaymentProvider    `gorm:"size:32;index;not null" json:"paymentProvider"`
-	Amount          int64              `gorm:"not null" json:"amount"`
-	Currency        string             `gorm:"size:16;not null;default:CNY" json:"currency"`
-	Status          PaymentOrderStatus `gorm:"size:32;index;not null;default:pending" json:"status"`
-	ProviderOrderID *string            `gorm:"size:128" json:"providerOrderId"`
-	ProviderTradeNo *string            `gorm:"size:128" json:"providerTradeNo"`
-	ProviderPayload datatypes.JSON     `gorm:"type:json" json:"providerPayload"`
-	ExpiresAt       *time.Time         `json:"expiresAt"`
-	PaidAt          *time.Time         `json:"paidAt"`
-	GrantedAt       *time.Time         `json:"grantedAt"`
-	CreatedAt       time.Time          `json:"createdAt"`
-	UpdatedAt       time.Time          `json:"updatedAt"`
+	BillingMonths   int                 `gorm:"not null;default:1" json:"billingMonths"`
+	DurationDays    int                 `gorm:"not null;default:0" json:"durationDays"`
+	UpgradeFromPlan string              `gorm:"size:64;not null;default:''" json:"upgradeFromPlan"`
+	UpgradeMonths   int                 `gorm:"not null;default:0" json:"upgradeMonths"`
+	UpgradeBaseAt   *time.Time          `json:"upgradeBaseAt"`
+	PlanCode        string              `gorm:"size:64;index;not null" json:"planCode"`
+	PaymentProvider PaymentProvider     `gorm:"size:32;index;not null" json:"paymentProvider"`
+	Amount          int64               `gorm:"not null" json:"amount"`
+	Currency        string              `gorm:"size:16;not null;default:CNY" json:"currency"`
+	Status          PaymentOrderStatus  `gorm:"size:32;index;not null;default:pending" json:"status"`
+	ProviderOrderID *string             `gorm:"size:128" json:"providerOrderId"`
+	ProviderTradeNo *string             `gorm:"size:128" json:"providerTradeNo"`
+	ProviderPayload datatypes.JSON      `gorm:"type:json" json:"providerPayload"`
+	ExpiresAt       *time.Time          `json:"expiresAt"`
+	PaidAt          *time.Time          `json:"paidAt"`
+	GrantedAt       *time.Time          `json:"grantedAt"`
+	CreatedAt       time.Time           `json:"createdAt"`
+	UpdatedAt       time.Time           `json:"updatedAt"`
 }
 
 type PaymentCallback struct {

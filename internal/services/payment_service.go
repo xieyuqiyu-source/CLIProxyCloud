@@ -50,6 +50,9 @@ type PaymentQuote struct {
 	DurationDays       int                        `json:"durationDays"`
 	Title              string                     `json:"title"`
 	Description        string                     `json:"description"`
+	UpgradeFromPlan    string                     `json:"upgradeFromPlan,omitempty"`
+	UpgradeMonths      int                        `json:"upgradeMonths,omitempty"`
+	UpgradeBaseAt      *time.Time                 `json:"upgradeBaseAt,omitempty"`
 	Allowed            bool                       `json:"allowed"`
 	Reason             string                     `json:"reason,omitempty"`
 }
@@ -203,6 +206,10 @@ func (s *PaymentService) QuoteOrder(userID uint, productCode string, billingMont
 		}
 		quote.PurchaseMode = models.PaymentPurchaseModeUpgradeDiffAll
 		quote.BillingMonths = remainingMonths
+		quote.UpgradeFromPlan = currentPlanCode
+		quote.UpgradeMonths = remainingMonths
+		baseAt := activeSub.ExpiresAt.UTC()
+		quote.UpgradeBaseAt = &baseAt
 		quote.Amount = diffAmount * int64(remainingMonths)
 		quote.DurationDays = 0
 		quote.Title = fmt.Sprintf("Pro Max 补差价升级（%d 个月）", remainingMonths)
@@ -311,6 +318,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		PurchaseMode:    quote.PurchaseMode,
 		BillingMonths:   quote.BillingMonths,
 		DurationDays:    quote.DurationDays,
+		UpgradeFromPlan: quote.UpgradeFromPlan,
+		UpgradeMonths:   quote.UpgradeMonths,
+		UpgradeBaseAt:   quote.UpgradeBaseAt,
 		PlanCode:        product.PlanCode,
 		PaymentProvider: provider,
 		Amount:          quote.Amount,
@@ -611,13 +621,7 @@ func (s *PaymentService) grantPlan(order *models.PaymentOrder, force bool) error
 		planSvc := NewPlanService(tx)
 		now := time.Now()
 		baseTime := now
-		var (
-			currentSub  *models.UserSubscription
-			currentPlan *models.Plan
-		)
 		if sub, plan, err := planSvc.GetActiveSubscription(locked.UserID); err == nil && sub != nil && plan != nil {
-			currentSub = sub
-			currentPlan = plan
 			if strings.EqualFold(plan.PlanCode, locked.PlanCode) && sub.ExpiresAt != nil && sub.ExpiresAt.After(baseTime) {
 				baseTime = *sub.ExpiresAt
 			}
@@ -626,12 +630,14 @@ func (s *PaymentService) grantPlan(order *models.PaymentOrder, force bool) error
 		var expiresAt *time.Time
 		switch locked.PurchaseMode {
 		case models.PaymentPurchaseModeUpgradeDiffAll:
-			if currentSub == nil || currentPlan == nil || !strings.EqualFold(currentPlan.PlanCode, "vip1") || locked.PlanCode != "vip2" {
-				return fmt.Errorf("upgrade diff grant requires an active Pro subscription")
+			if !strings.EqualFold(locked.UpgradeFromPlan, "vip1") || !strings.EqualFold(locked.PlanCode, "vip2") {
+				return fmt.Errorf("upgrade diff grant requires a valid upgrade snapshot")
 			}
-			if currentSub.ExpiresAt != nil && currentSub.ExpiresAt.After(now) {
-				next := *currentSub.ExpiresAt
+			if locked.UpgradeBaseAt != nil && locked.UpgradeBaseAt.After(now) {
+				next := *locked.UpgradeBaseAt
 				expiresAt = &next
+			} else {
+				return fmt.Errorf("upgrade diff grant snapshot has expired or is missing")
 			}
 		case models.PaymentPurchaseModeUpgradeReplaceMonth:
 			next := addPlanDuration(now, 30)
