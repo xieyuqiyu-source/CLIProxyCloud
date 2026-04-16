@@ -126,7 +126,7 @@ This means payment pricing should be stored in database, not hardcoded in client
 - `user_id`
 - `product_id`
 - `plan_code`
-- `payment_provider` (`wechat`, `alipay`)
+- `payment_provider` (`xunhu`)
 - `amount`
 - `currency`
 - `status` (`pending`, `paid`, `closed`, `failed`, `refunded`)
@@ -159,8 +159,7 @@ Add a payment module under:
 internal/payments/
   provider.go
   service.go
-  wechat/
-  alipay/
+  xunhu.go
 ```
 
 ### provider interface
@@ -172,7 +171,7 @@ The backend should expose a common provider interface:
 - `CloseOrder`
 - `HandleNotify`
 
-This keeps WeChat and Alipay implementations isolated.
+This keeps provider integrations isolated. The current first-phase implementation uses XunhuPay.
 
 ## First-phase API plan
 
@@ -187,7 +186,7 @@ Return enabled payment products for display in `CLIProxyApp`.
 Request body:
 
 - `product_code`
-- `provider` (`wechat` or `alipay`)
+- `provider` (`xunhu`)
 
 Response:
 
@@ -203,13 +202,9 @@ Used by `CLIProxyApp` to poll after QR display.
 
 ### Payment callback
 
-#### POST `/api/v1/pay/wechat/notify`
+#### POST `/api/v1/pay/xunhu/notify`
 
-WeChat official callback.
-
-#### POST `/api/v1/pay/alipay/notify`
-
-Alipay official callback.
+XunhuPay callback.
 
 ### Admin-side
 

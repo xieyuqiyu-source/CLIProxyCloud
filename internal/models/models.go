@@ -54,8 +54,7 @@ const (
 type PaymentProvider string
 
 const (
-	PaymentProviderWeChat PaymentProvider = "wechat"
-	PaymentProviderAlipay PaymentProvider = "alipay"
+	PaymentProviderXunhu PaymentProvider = "xunhu"
 )
 
 type PaymentProductStatus string

@@ -128,7 +128,7 @@
 - `user_id`
 - `product_id`
 - `plan_code`
-- `payment_provider`（`wechat`、`alipay`）
+- `payment_provider`（`xunhu`）
 - `amount`
 - `currency`
 - `status`（`pending`、`paid`、`closed`、`failed`、`refunded`）
@@ -161,8 +161,7 @@
 internal/payments/
   provider.go
   service.go
-  wechat/
-  alipay/
+  xunhu.go
 ```
 
 ### 支付 Provider 抽象
@@ -174,7 +173,7 @@ internal/payments/
 - `CloseOrder`
 - `HandleNotify`
 
-这样微信和支付宝可以独立实现，外层订单流程保持一致。
+这样支付渠道可以继续扩展，外层订单流程保持一致。当前第一阶段接入的是虎皮椒个人支付。
 
 ## 第一阶段 API 设计
 
@@ -189,7 +188,7 @@ internal/payments/
 请求体：
 
 - `product_code`
-- `provider`（`wechat` 或 `alipay`）
+- `provider`（`xunhu`）
 
 返回：
 
@@ -205,13 +204,9 @@ internal/payments/
 
 ### 支付回调
 
-#### POST `/api/v1/pay/wechat/notify`
+#### POST `/api/v1/pay/xunhu/notify`
 
-微信支付官方回调。
-
-#### POST `/api/v1/pay/alipay/notify`
-
-支付宝官方回调。
+虎皮椒支付回调。
 
 ### Admin 侧
 

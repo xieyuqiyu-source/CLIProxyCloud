@@ -8,6 +8,8 @@ type CreateOrderRequest struct {
 	Amount      int64
 	Currency    string
 	NotifyURL   string
+	ReturnURL   string
+	CallbackURL string
 	ExpiresIn   time.Duration
 }
 

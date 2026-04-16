@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -56,43 +55,27 @@ type PaymentQuote struct {
 }
 
 type PaymentService struct {
-	db     *gorm.DB
-	plan   *PlanService
-	wechat *payments.WeChatClient
-	alipay *payments.AlipayClient
-	cfg    config.PaymentConfig
+	db    *gorm.DB
+	plan  *PlanService
+	xunhu *payments.XunhuClient
+	cfg   config.PaymentConfig
 }
 
 func NewPaymentService(db *gorm.DB, planSvc *PlanService, cfg config.PaymentConfig) (*PaymentService, error) {
-	wechatClient, err := payments.NewWeChatClient(payments.WeChatConfig{
-		Enabled:          cfg.WeChat.Enabled,
-		AppID:            cfg.WeChat.AppID,
-		MchID:            cfg.WeChat.MchID,
-		SerialNo:         cfg.WeChat.SerialNo,
-		PrivateKeyPEM:    cfg.WeChat.PrivateKeyPEM,
-		PrivateKeyPath:   cfg.WeChat.PrivateKeyPath,
-		APIV3Key:         cfg.WeChat.APIV3Key,
-		NotifyURL:        cfg.WeChat.NotifyURL,
-		Gateway:          cfg.WeChat.Gateway,
-		PlatformCertPEM:  cfg.WeChat.PlatformCertPEM,
-		PlatformSerialNo: cfg.WeChat.PlatformSerialNo,
+	xunhuClient, err := payments.NewXunhuClient(payments.XunhuConfig{
+		Enabled:     cfg.Xunhu.Enabled,
+		AppID:       cfg.Xunhu.AppID,
+		Secret:      cfg.Xunhu.Secret,
+		NotifyURL:   cfg.Xunhu.NotifyURL,
+		ReturnURL:   cfg.Xunhu.ReturnURL,
+		CallbackURL: cfg.Xunhu.CallbackURL,
+		Gateway:     cfg.Xunhu.Gateway,
+		QueryURL:    cfg.Xunhu.QueryURL,
 	})
 	if err != nil {
 		return nil, err
 	}
-	alipayClient, err := payments.NewAlipayClient(payments.AlipayConfig{
-		Enabled:            cfg.Alipay.Enabled,
-		AppID:              cfg.Alipay.AppID,
-		PrivateKeyPEM:      cfg.Alipay.PrivateKeyPEM,
-		PrivateKeyPath:     cfg.Alipay.PrivateKeyPath,
-		AlipayPublicKeyPEM: cfg.Alipay.AlipayPublicKeyPEM,
-		NotifyURL:          cfg.Alipay.NotifyURL,
-		Gateway:            cfg.Alipay.Gateway,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &PaymentService{db: db, plan: planSvc, wechat: wechatClient, alipay: alipayClient, cfg: cfg}, nil
+	return &PaymentService{db: db, plan: planSvc, xunhu: xunhuClient, cfg: cfg}, nil
 }
 
 func DefaultPaymentProducts() []PaymentProductInput {
@@ -302,7 +285,7 @@ func (s *PaymentService) ListAdminOrders(limit int, status string, query string)
 }
 
 func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCode string, provider models.PaymentProvider, billingMonths int, purchaseMode models.PaymentPurchaseMode) (*models.PaymentOrder, *models.PaymentProduct, *PaymentCheckout, error) {
-	if provider != models.PaymentProviderWeChat && provider != models.PaymentProviderAlipay {
+	if provider != models.PaymentProviderXunhu {
 		return nil, nil, nil, fmt.Errorf("unsupported payment provider")
 	}
 	product, quote, err := s.QuoteOrder(userID, productCode, billingMonths, purchaseMode)
@@ -351,45 +334,26 @@ func (s *PaymentService) CreateOrder(ctx context.Context, userID uint, productCo
 		Amount:      order.Amount,
 		Currency:    order.Currency,
 		NotifyURL:   s.notifyURLForProvider(provider),
+		ReturnURL:   strings.TrimSpace(s.cfg.Xunhu.ReturnURL),
+		CallbackURL: strings.TrimSpace(s.cfg.Xunhu.CallbackURL),
 		ExpiresIn:   5 * time.Minute,
 	}
 
-	switch provider {
-	case models.PaymentProviderWeChat:
-		if s.wechat != nil && s.wechat.Enabled() {
-			result, err := s.wechat.CreateNativeOrder(ctx, createReq)
-			if err != nil {
-				return order, product, nil, err
-			}
-			if err := s.applyCreateResult(order, result); err != nil {
-				return nil, nil, nil, err
-			}
-			checkout = &PaymentCheckout{
-				Provider:        provider,
-				PaymentEnabled:  true,
-				CodeURL:         result.CodeURL,
-				ProviderOrderID: result.ProviderOrderID,
-				ProviderTradeNo: result.ProviderTradeNo,
-				Message:         "wechat native order created",
-			}
+	if s.xunhu != nil && s.xunhu.Enabled() {
+		result, err := s.xunhu.CreateOrder(ctx, createReq)
+		if err != nil {
+			return order, product, nil, err
 		}
-	case models.PaymentProviderAlipay:
-		if s.alipay != nil && s.alipay.Enabled() {
-			result, err := s.alipay.CreatePrecreateOrder(ctx, createReq)
-			if err != nil {
-				return order, product, nil, err
-			}
-			if err := s.applyCreateResult(order, result); err != nil {
-				return nil, nil, nil, err
-			}
-			checkout = &PaymentCheckout{
-				Provider:        provider,
-				PaymentEnabled:  true,
-				CodeURL:         result.CodeURL,
-				ProviderOrderID: result.ProviderOrderID,
-				ProviderTradeNo: result.ProviderTradeNo,
-				Message:         "alipay precreate order created",
-			}
+		if err := s.applyCreateResult(order, result); err != nil {
+			return nil, nil, nil, err
+		}
+		checkout = &PaymentCheckout{
+			Provider:        provider,
+			PaymentEnabled:  true,
+			CodeURL:         result.CodeURL,
+			ProviderOrderID: result.ProviderOrderID,
+			ProviderTradeNo: result.ProviderTradeNo,
+			Message:         "xunhu order created",
 		}
 	}
 
@@ -435,16 +399,11 @@ func (s *PaymentService) RefreshOrderStatus(ctx context.Context, order *models.P
 	var result *payments.QueryOrderResult
 	var err error
 	switch order.PaymentProvider {
-	case models.PaymentProviderWeChat:
-		if s.wechat == nil || !s.wechat.Enabled() {
+	case models.PaymentProviderXunhu:
+		if s.xunhu == nil || !s.xunhu.Enabled() {
 			return order, nil
 		}
-		result, err = s.wechat.QueryOrder(ctx, order.OrderNo)
-	case models.PaymentProviderAlipay:
-		if s.alipay == nil || !s.alipay.Enabled() {
-			return order, nil
-		}
-		result, err = s.alipay.QueryOrder(ctx, order.OrderNo)
+		result, err = s.xunhu.QueryOrder(ctx, order.OrderNo)
 	default:
 		return order, nil
 	}
@@ -476,34 +435,19 @@ func (s *PaymentService) CancelPendingOrder(order *models.PaymentOrder) (*models
 	return order, nil
 }
 
-func (s *PaymentService) HandleWeChatNotify(headers map[string]string, body []byte) (*models.PaymentOrder, error) {
-	if s.wechat == nil || !s.wechat.Enabled() {
-		return nil, fmt.Errorf("wechat payment is not enabled")
-	}
-	httpHeaders := make(map[string][]string)
-	for key, value := range headers {
-		httpHeaders[key] = []string{value}
-	}
-	result, err := s.wechat.ParseNotify(http.Header(httpHeaders), body)
-	if err != nil {
-		return nil, err
-	}
-	return s.applyNotifyResult(models.PaymentProviderWeChat, result)
-}
-
-func (s *PaymentService) HandleAlipayNotify(values map[string]string) (*models.PaymentOrder, error) {
-	if s.alipay == nil || !s.alipay.Enabled() {
-		return nil, fmt.Errorf("alipay payment is not enabled")
+func (s *PaymentService) HandleXunhuNotify(values map[string]string) (*models.PaymentOrder, error) {
+	if s.xunhu == nil || !s.xunhu.Enabled() {
+		return nil, fmt.Errorf("xunhu payment is not enabled")
 	}
 	form := make(map[string][]string)
 	for key, value := range values {
 		form[key] = []string{value}
 	}
-	result, err := s.alipay.ParseNotify(url.Values(form))
+	result, err := s.xunhu.ParseNotify(url.Values(form))
 	if err != nil {
 		return nil, err
 	}
-	return s.applyNotifyResult(models.PaymentProviderAlipay, result)
+	return s.applyNotifyResult(models.PaymentProviderXunhu, result)
 }
 
 func (s *PaymentService) UpsertProduct(productCode string, input PaymentProductInput) (*models.PaymentProduct, error) {
@@ -741,18 +685,15 @@ func (s *PaymentService) checkoutFromExistingOrder(order *models.PaymentOrder) *
 		return checkout
 	}
 	switch order.PaymentProvider {
-	case models.PaymentProviderWeChat:
-		if codeURL, ok := payload["code_url"].(string); ok {
+	case models.PaymentProviderXunhu:
+		if codeURL, ok := payload["url_qrcode"].(string); ok {
 			checkout.CodeURL = strings.TrimSpace(codeURL)
 		}
-	case models.PaymentProviderAlipay:
-		if nested, ok := payload["alipay_trade_precreate_response"].(map[string]any); ok {
-			if codeURL, ok := nested["qr_code"].(string); ok {
-				checkout.CodeURL = strings.TrimSpace(codeURL)
-			}
-			if tradeNo, ok := nested["trade_no"].(string); ok {
-				checkout.ProviderTradeNo = strings.TrimSpace(tradeNo)
-			}
+		if providerOrderID, ok := payload["open_order_id"].(string); ok {
+			checkout.ProviderOrderID = strings.TrimSpace(providerOrderID)
+		}
+		if tradeNo, ok := payload["transaction_id"].(string); ok {
+			checkout.ProviderTradeNo = strings.TrimSpace(tradeNo)
 		}
 	}
 	return checkout
@@ -834,10 +775,8 @@ func remainingBillingMonths(now time.Time, expiresAt time.Time) int {
 
 func (s *PaymentService) notifyURLForProvider(provider models.PaymentProvider) string {
 	switch provider {
-	case models.PaymentProviderWeChat:
-		return strings.TrimSpace(s.cfg.WeChat.NotifyURL)
-	case models.PaymentProviderAlipay:
-		return strings.TrimSpace(s.cfg.Alipay.NotifyURL)
+	case models.PaymentProviderXunhu:
+		return strings.TrimSpace(s.cfg.Xunhu.NotifyURL)
 	default:
 		return ""
 	}

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -260,28 +259,9 @@ func (h *Handler) CancelPaymentOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"order": order})
 }
 
-func (h *Handler) WeChatPaymentNotify(c *gin.Context) {
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": "read body failed"})
-		return
-	}
-	headers := map[string]string{}
-	for key, values := range c.Request.Header {
-		if len(values) > 0 {
-			headers[key] = values[0]
-		}
-	}
-	if _, err := h.paymentSvc.HandleWeChatNotify(headers, body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "FAIL", "message": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"code": "SUCCESS", "message": "成功"})
-}
-
-func (h *Handler) AlipayPaymentNotify(c *gin.Context) {
+func (h *Handler) XunhuPaymentNotify(c *gin.Context) {
 	if err := c.Request.ParseForm(); err != nil {
-		c.String(http.StatusBadRequest, "failure")
+		c.String(http.StatusBadRequest, "fail")
 		return
 	}
 	values := map[string]string{}
@@ -290,8 +270,8 @@ func (h *Handler) AlipayPaymentNotify(c *gin.Context) {
 			values[key] = items[0]
 		}
 	}
-	if _, err := h.paymentSvc.HandleAlipayNotify(values); err != nil {
-		c.String(http.StatusBadRequest, "failure")
+	if _, err := h.paymentSvc.HandleXunhuNotify(values); err != nil {
+		c.String(http.StatusBadRequest, "fail")
 		return
 	}
 	c.String(http.StatusOK, "success")
