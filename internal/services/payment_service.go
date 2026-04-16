@@ -380,6 +380,9 @@ func (s *PaymentService) findReusablePendingOrder(userID uint, product *models.P
 	}
 
 	checkout := s.checkoutFromExistingOrder(&order)
+	if !checkout.PaymentEnabled || strings.TrimSpace(checkout.CodeURL) == "" {
+		return nil, nil, nil
+	}
 	checkout.Message = "reused pending payment order"
 	return &order, checkout, nil
 }
