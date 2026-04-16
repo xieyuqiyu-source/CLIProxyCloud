@@ -12,6 +12,8 @@ import (
 
 func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddleware, storageRoot string) *gin.Engine {
 	router := gin.Default()
+	appRoot := filepath.Dir(storageRoot)
+	webRoot := filepath.Join(appRoot, "web")
 	router.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 		if origin != "" {
@@ -36,6 +38,10 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.Static("/assets", filepath.Join(webRoot, "assets"))
+	router.GET("/", func(c *gin.Context) {
+		c.File(filepath.Join(webRoot, "index.html"))
 	})
 	router.StaticFS("/downloads", gin.Dir(filepath.Join(storageRoot, "downloads"), false))
 

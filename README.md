@@ -10,6 +10,7 @@ It manages:
 - personal auth file cloud sync
 - shared auth file pool
 - future payment products and subscription order flow
+- a public website homepage for external presentation
 
 It works together with:
 
@@ -39,7 +40,8 @@ CLIProxyCloud/
 ├── internal/server
 ├── internal/services
 ├── internal/storage
-└── internal/crypto
+├── internal/crypto
+└── web
 ```
 
 ## Local Development
@@ -86,6 +88,8 @@ The server defaults to:
 
 - address: `:8090`
 - health endpoint: `/healthz`
+- public homepage: `/`
+- static site assets: `/assets/*`
 
 ## Plan Codes
 
@@ -173,6 +177,27 @@ On each upload, `CLIProxyCloud` will:
 The public update manifest is served at:
 
 - `/downloads/cliproxyapp/latest.json`
+
+## Public Website
+
+`CLIProxyCloud` now also serves a public website from the root path `/`.
+
+This page is intentionally independent from:
+
+- local `CLIProxyApi`
+- desktop login state
+- personal account data
+
+Its purpose is to provide:
+
+- a public-facing product landing page
+- a mobile-style personal client mockup
+- concise end-user usage guidance
+
+Static files are located under:
+
+- `web/index.html`
+- `web/assets/site.css`
 
 ## Current Scope
 

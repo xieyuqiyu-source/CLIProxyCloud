@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CLIProxy</title>
+    <meta
+      name="description"
+      content="CLIProxy 个人端使用入口与说明页。展示移动端风格界面、获取账号、OpenClaw 接入与会员开通说明。"
+    />
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">CLIProxy</span>
+          <h1>桌面代理工具，对外展示页</h1>
+          <p class="hero-text">
+            这个站点不依赖本地 CPA 和登录状态，只负责展示个人端界面样式、核心功能入口和使用说明，
+            方便签约、对外介绍和用户了解产品。
+          </p>
+          <div class="hero-actions">
+            <a class="cta primary" href="#how-to-use">查看使用说明</a>
+            <a class="cta secondary" href="#mobile-demo">查看界面示意</a>
+          </div>
+          <ul class="hero-points">
+            <li>打开应用后自动启动代理</li>
+            <li>支持获取共享账号、OpenClaw 接入、会员开通</li>
+            <li>移动端风格界面，个人用户操作路径清晰</li>
+          </ul>
+        </div>
+
+        <div class="phone-stage" id="mobile-demo">
+          <div class="phone-frame">
+            <div class="phone-notch"></div>
+            <div class="app-screen">
+              <header class="mini-header">
+                <div class="mini-brand">
+                  <span class="brand-dot"></span>
+                  <span>CLIProxy</span>
+                </div>
+                <span class="mini-plan">Pro Max</span>
+              </header>
+
+              <section class="mini-card profile-card">
+                <div class="inline-meta">
+                  <span class="username">xieyuqi</span>
+                  <span class="status on">运行中</span>
+                  <span class="tier">Pro Max</span>
+                </div>
+                <p class="card-tip">移动端个人界面默认保持小窗显示。</p>
+              </section>
+
+              <section class="quick-actions">
+                <button type="button" class="quick-btn shared">获取账号</button>
+                <button type="button" class="quick-btn dark">OpenClaw</button>
+                <button type="button" class="quick-btn accent">开通会员</button>
+              </section>
+
+              <nav class="provider-tabs" aria-label="供应商">
+                <span class="provider-tab active">全部</span>
+                <span class="provider-tab">Codex</span>
+                <span class="provider-tab">Claude</span>
+                <span class="provider-tab">Gemini</span>
+              </nav>
+
+              <section class="quota-stack">
+                <article class="quota-card self">
+                  <div class="quota-head">
+                    <span class="quota-title">codex-main</span>
+                    <span class="quota-tag">Plus</span>
+                  </div>
+                  <div class="quota-row">
+                    <span>当前账号</span>
+                    <strong>Ca***99@***look.com</strong>
+                  </div>
+                  <div class="quota-row">
+                    <span>状态</span>
+                    <strong class="healthy">正常</strong>
+                  </div>
+                  <div class="quota-row">
+                    <span>5h</span>
+                    <strong>32 / 550</strong>
+                  </div>
+                  <div class="meter"><span style="width: 18%"></span></div>
+                  <div class="quota-row">
+                    <span>1week</span>
+                    <strong>120 / 3500</strong>
+                  </div>
+                  <div class="meter"><span style="width: 28%"></span></div>
+                </article>
+
+                <article class="quota-card shared">
+                  <div class="quota-head">
+                    <span class="quota-title">共享-codex-alt</span>
+                    <span class="quota-tag">共享</span>
+                  </div>
+                  <div class="quota-row">
+                    <span>当前账号</span>
+                    <strong>Sh***88@***mail.com</strong>
+                  </div>
+                  <div class="quota-row">
+                    <span>状态</span>
+                    <strong class="healthy">正常</strong>
+                  </div>
+                  <div class="quota-row">
+                    <span>5h</span>
+                    <strong>80 / 550</strong>
+                  </div>
+                  <div class="meter warm"><span style="width: 52%"></span></div>
+                  <div class="quota-row">
+                    <span>1week</span>
+                    <strong>640 / 3500</strong>
+                  </div>
+                  <div class="meter warm"><span style="width: 36%"></span></div>
+                </article>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="guide" id="how-to-use">
+        <div class="section-title">
+          <span class="eyebrow">使用说明</span>
+          <h2>个人端的实际使用路径</h2>
+        </div>
+        <div class="guide-grid">
+          <article class="guide-card">
+            <span class="step">01</span>
+            <h3>打开应用</h3>
+            <p>个人用户进入移动端小窗，应用会自动启动代理，不需要先手动配置本地服务。</p>
+          </article>
+          <article class="guide-card">
+            <span class="step">02</span>
+            <h3>获取账号</h3>
+            <p>点击“获取账号”即可拉取共享号池或本地可用账号，自己的账号与共享账号会直接在卡片里区分展示。</p>
+          </article>
+          <article class="guide-card">
+            <span class="step">03</span>
+            <h3>查看配额</h3>
+            <p>按模型供应商切换标签，卡片上直接展示 5 小时与 1 周配额，用进度条快速判断账号可用度。</p>
+          </article>
+          <article class="guide-card">
+            <span class="step">04</span>
+            <h3>接入 OpenClaw</h3>
+            <p>点击 OpenClaw 按钮后，应用会把当前本地代理自动写入 OpenClaw 所需 provider 与模型配置。</p>
+          </article>
+          <article class="guide-card">
+            <span class="step">05</span>
+            <h3>开通会员</h3>
+            <p>会员弹窗支持 Pro 与 Pro Max 的月付、半年付、年付选择，支付二维码与订单状态单独展示。</p>
+          </article>
+          <article class="guide-card">
+            <span class="step">06</span>
+            <h3>持续使用</h3>
+            <p>支付成功后会自动刷新会员等级与权益，Pro、Pro Max 分别控制共享号池、自动切换与云端备份能力。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="feature-panel">
+        <div class="section-title compact">
+          <span class="eyebrow">能力说明</span>
+          <h2>适合对外展示的核心能力</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>移动端风格界面</h3>
+            <p>普通用户默认使用小窗界面，信息密度高，路径短，适合演示与真实使用。</p>
+          </article>
+          <article class="feature-card">
+            <h3>共享号池</h3>
+            <p>按套餐控制获取策略。共享账号与个人账号使用不同底色区分，状态直观。</p>
+          </article>
+          <article class="feature-card">
+            <h3>OpenClaw 接入</h3>
+            <p>一键将本地代理接入 OpenClaw，减少用户手动改配置的成本。</p>
+          </article>
+          <article class="feature-card">
+            <h3>会员与支付</h3>
+            <p>支持 Pro / Pro Max、月付 / 半年付 / 年付、微信支付与订单轮询提醒。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
