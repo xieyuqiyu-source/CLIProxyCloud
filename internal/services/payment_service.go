@@ -230,14 +230,14 @@ func (s *PaymentService) QuoteOrder(userID uint, productCode string, billingMont
 		if currentPlanCode == "vip2" && targetPlanCode == "vip1" {
 			return nil, nil, fmt.Errorf("Pro Max cannot be downgraded to Pro")
 		}
-		if currentPlanCode == "vip1" && targetPlanCode == "vip2" {
-			return nil, nil, fmt.Errorf("please choose an upgrade mode to switch from Pro to Pro Max")
-		}
 		quote.PurchaseMode = models.PaymentPurchaseModeStandard
 		quote.Amount = discountedAmount(product.PriceAmount, billingMonths)
 		quote.DurationDays = billingMonths * 30
 		quote.Title = fmt.Sprintf("%s%s", product.DisplayName, billingLabelSuffix(billingMonths))
 		quote.Description = discountedDescription(product.Description, billingMonths)
+		if currentPlanCode == "vip1" && targetPlanCode == "vip2" {
+			quote.Description = "重新升级订阅会覆盖旧的 Pro 订阅，并从支付成功时起重新计算 Pro Max 时长。"
+		}
 		return product, quote, nil
 	}
 }
