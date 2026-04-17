@@ -721,7 +721,7 @@ func addPlanDuration(start time.Time, durationDays int) time.Time {
 func discountedAmount(monthlyAmount int64, billingMonths int) int64 {
 	switch billingMonths {
 	case 6:
-		return int64(float64(monthlyAmount*6) * 0.9)
+		return int64(float64(monthlyAmount*6) * 0.85)
 	case 12:
 		return int64(float64(monthlyAmount*12) * 0.7)
 	default:
@@ -761,7 +761,7 @@ func billingLabelSuffix(months int) string {
 func discountedDescription(base string, months int) string {
 	switch months {
 	case 6:
-		return strings.TrimSpace(base + " 半年付享 9 折。")
+		return strings.TrimSpace(base + " 半年付享 85 折。")
 	case 12:
 		return strings.TrimSpace(base + " 年付享 7 折。")
 	default:

@@ -1,189 +1,342 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CLIProxy</title>
-    <meta
-      name="description"
-      content="CLIProxy 个人端使用入口与说明页。展示移动端风格界面、获取账号、OpenClaw 接入与会员开通说明。"
-    />
-    <link rel="stylesheet" href="/assets/site.css" />
-  </head>
-  <body>
-    <main class="page-shell">
-      <section class="hero">
-        <div class="hero-copy">
-          <span class="eyebrow">CLIProxy</span>
-          <h1>桌面代理工具，对外展示页</h1>
-          <p class="hero-text">
-            这个站点不依赖本地 CPA 和登录状态，只负责展示个人端界面样式、核心功能入口和使用说明，
-            方便签约、对外介绍和用户了解产品。
-          </p>
-          <div class="hero-actions">
-            <a class="cta primary" href="#how-to-use">查看使用说明</a>
-            <a class="cta secondary" href="#mobile-demo">查看界面示意</a>
-          </div>
-          <ul class="hero-points">
-            <li>打开应用后自动启动代理</li>
-            <li>支持获取共享账号、OpenClaw 接入、会员开通</li>
-            <li>移动端风格界面，个人用户操作路径清晰</li>
-          </ul>
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPSwitch - 桌面代理工具</title>
+  <meta name="description" content="CPSwitch 个人端使用入口与说明页。展示移动端风格界面、获取账号、OpenClaw 接入与会员开通说明。">
+  <!-- 引入 Tailwind CSS 和 daisyUI -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    /* 移除所有默认滚动条，保持手机模型内部的美观 */
+    .mockup-phone .display::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-base-100 text-base-content min-h-screen flex flex-col">
+
+  <!-- 导航栏 -->
+  <div class="navbar bg-base-100/90 backdrop-blur sticky top-0 z-50 border-b border-base-200">
+    <div class="navbar-start">
+      <div class="dropdown">
+        <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
         </div>
+        <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+          <li><a href="#how-to-use">使用说明</a></li>
+          <li><a href="#features">核心能力</a></li>
+        </ul>
+      </div>
+      <a class="btn btn-ghost text-xl gap-2">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        </div>
+        CPSwitch
+      </a>
+    </div>
+    <div class="navbar-center hidden lg:flex">
+      <ul class="menu menu-horizontal px-1 font-medium">
+        <li><a href="#how-to-use">使用说明</a></li>
+        <li><a href="#features">核心能力</a></li>
+      </ul>
+    </div>
+    <div class="navbar-end">
+      <a href="#how-to-use" class="btn btn-primary btn-sm md:btn-md rounded-full">开始使用</a>
+    </div>
+  </div>
 
-        <div class="phone-stage" id="mobile-demo">
-          <div class="phone-frame">
-            <div class="phone-notch"></div>
-            <div class="app-screen">
-              <header class="mini-header">
-                <div class="mini-brand">
-                  <span class="brand-dot"></span>
-                  <span>CLIProxy</span>
+  <main class="flex-grow">
+    <!-- Hero 区域 -->
+    <div class="hero min-h-[80vh] bg-base-200 py-12 lg:py-0">
+      <div class="hero-content flex-col lg:flex-row-reverse gap-12 lg:gap-24 w-full max-w-7xl">
+        
+        <!-- 手机模型展示区 -->
+        <div class="mockup-phone shadow-2xl border-base-300 border-4">
+          <div class="camera"></div> 
+          <div class="display">
+            <div class="artboard artboard-demo phone-1 bg-base-100 flex-col justify-start p-4 relative overflow-y-auto overflow-x-hidden block">
+              <!-- App 界面头部 -->
+              <div class="w-full flex justify-between items-center mb-6 mt-6">
+                <div class="flex items-center gap-2 font-bold text-sm">
+                  <div class="w-4 h-4 rounded-md bg-primary flex items-center justify-center text-primary-content shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                  </div>
+                  CPSwitch
                 </div>
-                <span class="mini-plan">Pro Max</span>
-              </header>
+                <div class="badge badge-warning badge-sm font-bold">Pro Max</div>
+              </div>
 
-              <section class="mini-card profile-card">
-                <div class="inline-meta">
-                  <span class="username">xieyuqi</span>
-                  <span class="status on">运行中</span>
-                  <span class="tier">Pro Max</span>
+              <!-- 用户信息卡片 -->
+              <div class="card w-full bg-base-200 shadow-sm border border-base-300 mb-4 rounded-2xl">
+                <div class="card-body p-4">
+                  <div class="flex justify-between items-center text-xs font-bold mb-2">
+                    <span>xieyuqi</span>
+                    <div class="badge badge-success badge-outline badge-sm">运行中</div>
+                    <div class="badge badge-info badge-outline badge-sm">Pro Max</div>
+                  </div>
+                  <p class="text-[10px] text-base-content/60">移动端个人界面默认保持小窗显示。</p>
                 </div>
-                <p class="card-tip">移动端个人界面默认保持小窗显示。</p>
-              </section>
+              </div>
 
-              <section class="quick-actions">
-                <button type="button" class="quick-btn shared">获取账号</button>
-                <button type="button" class="quick-btn dark">OpenClaw</button>
-                <button type="button" class="quick-btn accent">开通会员</button>
-              </section>
+              <!-- 快捷操作按钮 -->
+              <div class="grid grid-cols-3 gap-2 w-full mb-4">
+                <button class="btn btn-success btn-xs h-8 rounded-lg text-success-content border-none shadow-sm">获取账号</button>
+                <button class="btn btn-neutral btn-xs h-8 rounded-lg border-none shadow-sm">OpenClaw</button>
+                <button class="btn btn-primary btn-xs h-8 rounded-lg border-none shadow-sm">开通会员</button>
+              </div>
 
-              <nav class="provider-tabs" aria-label="供应商">
-                <span class="provider-tab active">全部</span>
-                <span class="provider-tab">Codex</span>
-                <span class="provider-tab">Claude</span>
-                <span class="provider-tab">Gemini</span>
-              </nav>
+              <!-- 供应商切换 Tab -->
+              <div class="tabs tabs-boxed w-full mb-4 bg-base-200 p-1 rounded-xl">
+                <a class="tab tab-active tab-sm flex-1 text-xs rounded-lg">全部</a> 
+                <a class="tab tab-sm flex-1 text-xs rounded-lg">Codex</a> 
+                <a class="tab tab-sm flex-1 text-xs rounded-lg">Claude</a>
+              </div>
 
-              <section class="quota-stack">
-                <article class="quota-card self">
-                  <div class="quota-head">
-                    <span class="quota-title">codex-main</span>
-                    <span class="quota-tag">Plus</span>
+              <!-- 配额卡片列表 -->
+              <div class="flex flex-col gap-3 w-full pb-8">
+                <!-- 个人账号配额 -->
+                <div class="card bg-success/10 border border-success/20 w-full rounded-2xl">
+                  <div class="card-body p-3 gap-2">
+                    <div class="flex justify-between items-center">
+                      <span class="font-bold text-xs">codex-main</span>
+                      <span class="badge badge-ghost badge-sm text-[10px]">Plus</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-base-content/70">当前账号</span>
+                      <span class="font-bold">Ca***99@***look.com</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-base-content/70">状态</span>
+                      <span class="text-success font-bold">正常</span>
+                    </div>
+                    <div class="mt-1">
+                      <div class="flex justify-between text-[10px] mb-1">
+                        <span class="text-base-content/70">5h</span>
+                        <span class="font-bold">32 / 550</span>
+                      </div>
+                      <progress class="progress progress-success w-full h-1.5" value="18" max="100"></progress>
+                    </div>
                   </div>
-                  <div class="quota-row">
-                    <span>当前账号</span>
-                    <strong>Ca***99@***look.com</strong>
+                </div>
+                <!-- 共享账号配额 -->
+                <div class="card bg-warning/10 border border-warning/20 w-full rounded-2xl">
+                  <div class="card-body p-3 gap-2">
+                    <div class="flex justify-between items-center">
+                      <span class="font-bold text-xs">共享-codex-alt</span>
+                      <span class="badge badge-ghost badge-sm text-[10px]">共享</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-base-content/70">当前账号</span>
+                      <span class="font-bold">Sh***88@***mail.com</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-base-content/70">状态</span>
+                      <span class="text-success font-bold">正常</span>
+                    </div>
+                    <div class="mt-1">
+                      <div class="flex justify-between text-[10px] mb-1">
+                        <span class="text-base-content/70">5h</span>
+                        <span class="font-bold">80 / 550</span>
+                      </div>
+                      <progress class="progress progress-warning w-full h-1.5" value="52" max="100"></progress>
+                    </div>
                   </div>
-                  <div class="quota-row">
-                    <span>状态</span>
-                    <strong class="healthy">正常</strong>
-                  </div>
-                  <div class="quota-row">
-                    <span>5h</span>
-                    <strong>32 / 550</strong>
-                  </div>
-                  <div class="meter"><span style="width: 18%"></span></div>
-                  <div class="quota-row">
-                    <span>1week</span>
-                    <strong>120 / 3500</strong>
-                  </div>
-                  <div class="meter"><span style="width: 28%"></span></div>
-                </article>
-
-                <article class="quota-card shared">
-                  <div class="quota-head">
-                    <span class="quota-title">共享-codex-alt</span>
-                    <span class="quota-tag">共享</span>
-                  </div>
-                  <div class="quota-row">
-                    <span>当前账号</span>
-                    <strong>Sh***88@***mail.com</strong>
-                  </div>
-                  <div class="quota-row">
-                    <span>状态</span>
-                    <strong class="healthy">正常</strong>
-                  </div>
-                  <div class="quota-row">
-                    <span>5h</span>
-                    <strong>80 / 550</strong>
-                  </div>
-                  <div class="meter warm"><span style="width: 52%"></span></div>
-                  <div class="quota-row">
-                    <span>1week</span>
-                    <strong>640 / 3500</strong>
-                  </div>
-                  <div class="meter warm"><span style="width: 36%"></span></div>
-                </article>
-              </section>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section class="guide" id="how-to-use">
-        <div class="section-title">
-          <span class="eyebrow">使用说明</span>
-          <h2>个人端的实际使用路径</h2>
+        <!-- Hero 文本内容 -->
+        <div class="max-w-xl text-center lg:text-left">
+          <div class="badge badge-primary badge-outline mb-6 py-3 px-4 text-sm font-bold border-2">CPSwitch</div>
+          <h1 class="text-4xl lg:text-6xl font-extrabold leading-tight tracking-tight mb-6">
+            桌面代理工具<br/>
+            <span class="text-primary">极简高效</span>的个人体验
+          </h1>
+          <p class="py-6 text-lg text-base-content/70 leading-relaxed">
+            这个站点不依赖本地 CPA 和登录状态，只负责展示个人端界面样式、核心功能入口和使用说明，方便签约、对外介绍和用户了解产品。
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mt-4">
+            <a href="#how-to-use" class="btn btn-primary btn-lg rounded-full px-8 shadow-lg shadow-primary/20 border-none">查看使用说明</a>
+            <a href="#features" class="btn btn-outline btn-lg rounded-full px-8 hover:bg-base-300 hover:text-base-content hover:border-base-300">探索核心能力</a>
+          </div>
+          <div class="mt-10 flex flex-col gap-3 text-sm font-medium text-base-content/80 text-left w-max mx-auto lg:mx-0">
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+              打开应用后自动启动代理
+            </div>
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+              支持获取共享账号、OpenClaw 接入、会员开通
+            </div>
+            <div class="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+              移动端风格界面，个人用户操作路径清晰
+            </div>
+          </div>
         </div>
-        <div class="guide-grid">
-          <article class="guide-card">
-            <span class="step">01</span>
-            <h3>打开应用</h3>
-            <p>个人用户进入移动端小窗，应用会自动启动代理，不需要先手动配置本地服务。</p>
-          </article>
-          <article class="guide-card">
-            <span class="step">02</span>
-            <h3>获取账号</h3>
-            <p>点击“获取账号”即可拉取共享号池或本地可用账号，自己的账号与共享账号会直接在卡片里区分展示。</p>
-          </article>
-          <article class="guide-card">
-            <span class="step">03</span>
-            <h3>查看配额</h3>
-            <p>按模型供应商切换标签，卡片上直接展示 5 小时与 1 周配额，用进度条快速判断账号可用度。</p>
-          </article>
-          <article class="guide-card">
-            <span class="step">04</span>
-            <h3>接入 OpenClaw</h3>
-            <p>点击 OpenClaw 按钮后，应用会把当前本地代理自动写入 OpenClaw 所需 provider 与模型配置。</p>
-          </article>
-          <article class="guide-card">
-            <span class="step">05</span>
-            <h3>开通会员</h3>
-            <p>会员弹窗支持 Pro 与 Pro Max 的月付、半年付、年付选择，支付二维码与订单状态单独展示。</p>
-          </article>
-          <article class="guide-card">
-            <span class="step">06</span>
-            <h3>持续使用</h3>
-            <p>支付成功后会自动刷新会员等级与权益，Pro、Pro Max 分别控制共享号池、自动切换与云端备份能力。</p>
-          </article>
-        </div>
-      </section>
+      </div>
+    </div>
 
-      <section class="feature-panel">
-        <div class="section-title compact">
-          <span class="eyebrow">能力说明</span>
-          <h2>适合对外展示的核心能力</h2>
+    <!-- 使用说明区域 -->
+    <section id="how-to-use" class="py-24 bg-base-100">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-16">
+          <div class="badge badge-secondary badge-outline mb-4">使用说明</div>
+          <h2 class="text-3xl md:text-4xl font-bold mb-4">个人端的实际使用路径</h2>
+          <p class="text-base-content/70">简单直观的操作流程，无需复杂的配置即可快速上手</p>
         </div>
-        <div class="feature-grid">
-          <article class="feature-card">
-            <h3>移动端风格界面</h3>
-            <p>普通用户默认使用小窗界面，信息密度高，路径短，适合演示与真实使用。</p>
-          </article>
-          <article class="feature-card">
-            <h3>共享号池</h3>
-            <p>按套餐控制获取策略。共享账号与个人账号使用不同底色区分，状态直观。</p>
-          </article>
-          <article class="feature-card">
-            <h3>OpenClaw 接入</h3>
-            <p>一键将本地代理接入 OpenClaw，减少用户手动改配置的成本。</p>
-          </article>
-          <article class="feature-card">
-            <h3>会员与支付</h3>
-            <p>支持 Pro / Pro Max、月付 / 半年付 / 年付、微信支付与订单轮询提醒。</p>
-          </article>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- 步骤 1 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl font-black mb-4">01</div>
+              <h3 class="card-title text-xl mb-2">打开应用</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">个人用户进入移动端小窗，应用会自动启动代理，不需要先手动配置本地服务。</p>
+            </div>
+          </div>
+          <!-- 步骤 2 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center text-xl font-black mb-4">02</div>
+              <h3 class="card-title text-xl mb-2">获取账号</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">点击“获取账号”即可拉取共享号池或本地可用账号，自己的账号与共享账号会直接在卡片里区分展示。</p>
+            </div>
+          </div>
+          <!-- 步骤 3 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-accent/10 text-accent flex items-center justify-center text-xl font-black mb-4">03</div>
+              <h3 class="card-title text-xl mb-2">查看配额</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">按模型供应商切换标签，卡片上直接展示 5 小时与 1 周配额，用进度条快速判断账号可用度。</p>
+            </div>
+          </div>
+          <!-- 步骤 4 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-info/10 text-info flex items-center justify-center text-xl font-black mb-4">04</div>
+              <h3 class="card-title text-xl mb-2">接入 OpenClaw</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">点击 OpenClaw 按钮后，应用会把当前本地代理自动写入 OpenClaw 所需 provider 与模型配置。</p>
+            </div>
+          </div>
+          <!-- 步骤 5 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-warning/10 text-warning flex items-center justify-center text-xl font-black mb-4">05</div>
+              <h3 class="card-title text-xl mb-2">开通会员</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">会员弹窗支持 Pro 与 Pro Max 的月付、半年付、年付选择，支付二维码与订单状态单独展示。</p>
+            </div>
+          </div>
+          <!-- 步骤 6 -->
+          <div class="card bg-base-200 hover:shadow-xl transition-all border border-base-300 hover:-translate-y-1">
+            <div class="card-body">
+              <div class="w-12 h-12 rounded-2xl bg-success/10 text-success flex items-center justify-center text-xl font-black mb-4">06</div>
+              <h3 class="card-title text-xl mb-2">持续使用</h3>
+              <p class="text-base-content/70 leading-relaxed text-sm">支付成功后会自动刷新会员等级与权益，Pro、Pro Max 分别控制共享号池、自动切换与云端备份能力。</p>
+            </div>
+          </div>
         </div>
-      </section>
-    </main>
-  </body>
+      </div>
+    </section>
+
+    <!-- 核心能力区域 -->
+    <section id="features" class="py-24 bg-base-200">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+          <div class="max-w-xl">
+            <div class="badge badge-accent badge-outline mb-4">能力说明</div>
+            <h2 class="text-3xl md:text-4xl font-bold">适合对外展示的核心能力</h2>
+          </div>
+          <p class="text-base-content/70 max-w-sm text-sm">
+            专为现代工作流打造的代理工具，提供了一系列强大而易用的特性。
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <!-- 特性 1 -->
+          <div class="card bg-base-100 border border-base-300 hover:border-primary/50 transition-colors">
+            <div class="card-body p-6">
+              <div class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+              </div>
+              <h3 class="font-bold text-lg mb-2">移动端风格界面</h3>
+              <p class="text-sm text-base-content/70 leading-relaxed">普通用户默认使用小窗界面，信息密度高，路径短，适合演示与真实使用。</p>
+            </div>
+          </div>
+          <!-- 特性 2 -->
+          <div class="card bg-base-100 border border-base-300 hover:border-primary/50 transition-colors">
+            <div class="card-body p-6">
+              <div class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              </div>
+              <h3 class="font-bold text-lg mb-2">共享号池</h3>
+              <p class="text-sm text-base-content/70 leading-relaxed">按套餐控制获取策略。共享账号与个人账号使用不同底色区分，状态直观。</p>
+            </div>
+          </div>
+          <!-- 特性 3 -->
+          <div class="card bg-base-100 border border-base-300 hover:border-primary/50 transition-colors">
+            <div class="card-body p-6">
+              <div class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+              </div>
+              <h3 class="font-bold text-lg mb-2">OpenClaw 接入</h3>
+              <p class="text-sm text-base-content/70 leading-relaxed">一键将本地代理接入 OpenClaw，减少用户手动改配置的成本。</p>
+            </div>
+          </div>
+          <!-- 特性 4 -->
+          <div class="card bg-base-100 border border-base-300 hover:border-primary/50 transition-colors">
+            <div class="card-body p-6">
+              <div class="w-10 h-10 rounded-lg bg-base-200 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+              </div>
+              <h3 class="font-bold text-lg mb-2">会员与支付</h3>
+              <p class="text-sm text-base-content/70 leading-relaxed">支持 Pro / Pro Max、多周期付款选择、微信支付与订单轮询提醒。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部 CTA -->
+    <section class="py-20 bg-primary text-primary-content">
+      <div class="max-w-4xl mx-auto px-6 text-center">
+        <h2 class="text-3xl md:text-5xl font-bold mb-6">准备好提升效率了吗？</h2>
+        <p class="text-primary-content/80 mb-10 text-lg max-w-2xl mx-auto">
+          立即体验 CPSwitch 带来的便捷，无论是共享号池还是 OpenClaw 接入，一切都变得如此简单。
+        </p>
+        <a href="#how-to-use" class="btn btn-neutral btn-lg rounded-full px-12 border-none">立即开始</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="footer footer-center p-10 bg-base-300 text-base-content rounded">
+    <aside>
+      <div class="flex items-center gap-2 font-bold text-xl mb-2">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        </div>
+        CPSwitch
+      </div>
+      <p class="font-medium">
+        提供极简高效的桌面代理工具体验
+      </p> 
+      <p class="mt-4 text-sm text-base-content/60">Copyright © 2024 - All right reserved by CPSwitch</p>
+    </aside>
+  </footer>
+
+</body>
 </html>
