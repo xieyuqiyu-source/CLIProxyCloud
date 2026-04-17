@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 背景：使用圆角矩形，颜色采用类似 daisyUI primary 的紫蓝色 -->
+  <rect width="512" height="512" rx="112" fill="#7480ff"/>
+  
+  <!-- Switch 图标，象征路由与切换 -->
+  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="32" stroke="#ffffff" fill="none" d="M170 150h256m0 0l-85-85m85 85l-85 85m0 128H170m0 0l85 85m-85-85l85-85" />
+</svg>
