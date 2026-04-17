@@ -187,6 +187,19 @@
             <a href="#how-to-use" class="btn btn-primary btn-lg rounded-full px-8 shadow-lg shadow-primary/20 border-none">查看使用说明</a>
             <a href="#features" class="btn btn-outline btn-lg rounded-full px-8 hover:bg-base-300 hover:text-base-content hover:border-base-300">探索核心能力</a>
           </div>
+          <div class="mt-6 rounded-3xl border border-base-300 bg-base-100/75 p-4 backdrop-blur-sm max-w-xl mx-auto lg:mx-0">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-xs uppercase tracking-[0.28em] text-base-content/45">Latest Release</div>
+                <div class="mt-2 text-2xl font-black" id="download-version">v0.1.9</div>
+                <div class="mt-1 text-sm text-base-content/60" id="download-notes">Windows 与 macOS 安装包</div>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                <a id="download-win" href="/downloads/cliproxyapp/CPSwitch_0.1.9_x64-setup.exe" class="btn btn-primary rounded-full px-6">下载 Win</a>
+                <a id="download-mac" href="/downloads/cliproxyapp/CLIProxyApp.app.zip" class="btn btn-outline rounded-full px-6">下载 Mac</a>
+              </div>
+            </div>
+          </div>
           <div class="mt-10 flex flex-col gap-3 text-sm font-medium text-base-content/80 text-left w-max mx-auto lg:mx-0">
             <div class="flex items-center gap-3">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
@@ -357,6 +370,36 @@
 
   <!-- AOS 动画初始化 -->
   <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <script>
+    (async () => {
+      try {
+        const response = await fetch('/downloads/cliproxyapp/latest.json', { cache: 'no-store' });
+        if (!response.ok) return;
+        const manifest = await response.json();
+        const versionNode = document.getElementById('download-version');
+        const notesNode = document.getElementById('download-notes');
+        const winNode = document.getElementById('download-win');
+        const macNode = document.getElementById('download-mac');
+
+        if (versionNode && manifest.version) {
+          versionNode.textContent = 'v' + manifest.version;
+        }
+        if (notesNode) {
+          const note = manifest.notes && String(manifest.notes).trim()
+            ? String(manifest.notes).trim()
+            : 'Windows 与 macOS 安装包';
+          notesNode.textContent = note;
+        }
+        if (winNode && manifest.downloads?.windows) {
+          winNode.href = manifest.downloads.windows;
+        }
+        if (macNode && manifest.downloads?.macos) {
+          macNode.href = manifest.downloads.macos;
+        }
+      } catch (_) {
+      }
+    })();
+  </script>
   <script>
     AOS.init({
       once: true,       // 动画只执行一次
