@@ -99,7 +99,7 @@ func (h *Handler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	login, challenge, err := h.authSvc.BeginPasswordLogin(strings.TrimSpace(strings.ToLower(req.Email)), req.Password, req.DeviceID, req.DeviceName, req.Platform, req.TrustDevice)
+	login, challenge, err := h.authSvc.BeginPasswordLogin(normalizeLoginIdentifier(req.Email), req.Password, req.DeviceID, req.DeviceName, req.Platform, req.TrustDevice)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -133,7 +133,7 @@ func (h *Handler) VerifyLogin(c *gin.Context) {
 		return
 	}
 	login, conflict, err := h.authSvc.VerifyLoginChallenge(
-		strings.TrimSpace(strings.ToLower(req.Email)),
+		normalizeLoginIdentifier(req.Email),
 		req.ChallengeID,
 		req.Code,
 		req.TrustDevice,
@@ -166,12 +166,20 @@ func (h *Handler) TrustedDeviceLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	login, err := h.authSvc.LoginTrustedDevice(strings.TrimSpace(strings.ToLower(req.Email)), req.DeviceID, req.TrustedToken, req.DeviceName, req.Platform)
+	login, err := h.authSvc.LoginTrustedDevice(normalizeLoginIdentifier(req.Email), req.DeviceID, req.TrustedToken, req.DeviceName, req.Platform)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 	h.writeLoginSuccess(c, login)
+}
+
+func normalizeLoginIdentifier(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.Contains(value, "@") {
+		return strings.ToLower(value)
+	}
+	return value
 }
 
 func (h *Handler) Me(c *gin.Context) {

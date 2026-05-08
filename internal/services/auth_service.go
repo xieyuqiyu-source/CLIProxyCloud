@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -196,14 +197,14 @@ func (s *AuthService) VerifyRegister(email string, challengeID string, code stri
 	return user, nil
 }
 
-func (s *AuthService) BeginPasswordLogin(email string, password string, deviceID string, deviceName string, platform string, trustDevice bool) (*LoginSuccess, *LoginChallengeResult, error) {
-	user, err := s.authenticateUser(email, password)
+func (s *AuthService) BeginPasswordLogin(identifier string, password string, deviceID string, deviceName string, platform string, trustDevice bool) (*LoginSuccess, *LoginChallengeResult, error) {
+	user, err := s.authenticateUser(identifier, password)
 	if err != nil {
 		return nil, nil, err
 	}
 	deviceID, deviceName, platform = normalizeDeviceFields(deviceID, deviceName, platform)
 
-	if user.Role == models.UserRoleAdmin {
+	if user.Role == models.UserRoleAdmin || !looksLikeEmail(user.Email) {
 		login, err := s.finalizeLogin(user, deviceID, deviceName, platform, trustDevice, true)
 		return login, nil, err
 	}
@@ -226,16 +227,16 @@ func (s *AuthService) BeginPasswordLogin(email string, password string, deviceID
 	}, nil
 }
 
-func (s *AuthService) VerifyLoginChallenge(email string, challengeID string, code string, trustDevice bool, forceLogoutExisting bool) (*LoginSuccess, *DeviceConflict, error) {
-	email = strings.TrimSpace(strings.ToLower(email))
+func (s *AuthService) VerifyLoginChallenge(identifier string, challengeID string, code string, trustDevice bool, forceLogoutExisting bool) (*LoginSuccess, *DeviceConflict, error) {
+	identifier = normalizeLoginIdentifier(identifier)
 	challengeID = strings.TrimSpace(challengeID)
 	code = strings.TrimSpace(code)
-	if email == "" || challengeID == "" || code == "" {
+	if identifier == "" || challengeID == "" || code == "" {
 		return nil, nil, fmt.Errorf("email, challenge_id and code are required")
 	}
 
 	var challenge models.LoginVerification
-	if err := s.db.Where("challenge_id = ? AND email = ?", challengeID, email).First(&challenge).Error; err != nil {
+	if err := s.db.Where("challenge_id = ? AND email = ?", challengeID, identifier).First(&challenge).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, fmt.Errorf("verification challenge not found")
 		}
@@ -278,16 +279,16 @@ func (s *AuthService) VerifyLoginChallenge(email string, challengeID string, cod
 	return login, nil, nil
 }
 
-func (s *AuthService) LoginTrustedDevice(email string, deviceID string, trustedToken string, deviceName string, platform string) (*LoginSuccess, error) {
-	email = strings.TrimSpace(strings.ToLower(email))
+func (s *AuthService) LoginTrustedDevice(identifier string, deviceID string, trustedToken string, deviceName string, platform string) (*LoginSuccess, error) {
+	identifier = normalizeLoginIdentifier(identifier)
 	deviceID, deviceName, platform = normalizeDeviceFields(deviceID, deviceName, platform)
 	trustedToken = strings.TrimSpace(trustedToken)
-	if email == "" || deviceID == "" || trustedToken == "" {
+	if identifier == "" || deviceID == "" || trustedToken == "" {
 		return nil, fmt.Errorf("trusted device credentials are required")
 	}
 
-	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+	user, err := s.lookupUserByIdentifier(identifier)
+	if err != nil {
 		return nil, fmt.Errorf("trusted device login expired")
 	}
 	device, err := s.findDevice(user.ID, deviceID)
@@ -301,7 +302,7 @@ func (s *AuthService) LoginTrustedDevice(email string, deviceID string, trustedT
 		return nil, fmt.Errorf("trusted device login expired")
 	}
 
-	return s.finalizeLogin(&user, deviceID, deviceName, platform, true, false)
+	return s.finalizeLogin(user, deviceID, deviceName, platform, true, false)
 }
 
 func (s *AuthService) ChangePassword(userID uint, currentPassword string, newPassword string) error {
@@ -398,9 +399,13 @@ func (s *AuthService) ParseToken(raw string) (*SessionClaims, error) {
 	return result, nil
 }
 
-func (s *AuthService) authenticateUser(email string, password string) (*models.User, error) {
+func (s *AuthService) authenticateUser(identifier string, password string) (*models.User, error) {
+	identifier = normalizeLoginIdentifier(identifier)
+	if identifier == "" {
+		return nil, fmt.Errorf("invalid credentials")
+	}
 	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.lookupUserQuery(identifier).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("invalid credentials")
 		}
@@ -410,6 +415,43 @@ func (s *AuthService) authenticateUser(email string, password string) (*models.U
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	return &user, nil
+}
+
+func normalizeLoginIdentifier(identifier string) string {
+	identifier = strings.TrimSpace(identifier)
+	if looksLikeEmail(identifier) {
+		return strings.ToLower(identifier)
+	}
+	return identifier
+}
+
+func looksLikeEmail(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || !strings.Contains(value, "@") {
+		return false
+	}
+	_, err := mail.ParseAddress(value)
+	return err == nil
+}
+
+func (s *AuthService) lookupUserByIdentifier(identifier string) (*models.User, error) {
+	var user models.User
+	if err := s.lookupUserQuery(identifier).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (s *AuthService) lookupUserQuery(identifier string) *gorm.DB {
+	normalized := normalizeLoginIdentifier(identifier)
+	query := s.db.Where("email = ?", normalized)
+	if !looksLikeEmail(normalized) {
+		lowerIdentifier := strings.ToLower(normalized)
+		if lowerIdentifier != normalized {
+			query = query.Or("email = ?", lowerIdentifier)
+		}
+	}
+	return query
 }
 
 func (s *AuthService) finalizeLogin(user *models.User, deviceID string, deviceName string, platform string, trustDevice bool, verified bool) (*LoginSuccess, error) {
