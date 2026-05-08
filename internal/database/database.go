@@ -27,6 +27,8 @@ func Migrate(db *gorm.DB) error {
 		&models.Plan{},
 		&models.UserSubscription{},
 		&models.Device{},
+		&models.LoginVerification{},
+		&models.RegistrationVerification{},
 		&models.AuthFile{},
 		&models.AuthFileVersion{},
 		&models.SyncLog{},

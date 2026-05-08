@@ -23,7 +23,7 @@ func (s *DeviceService) RegisterOrTouch(user *models.User, features FeatureFlags
 	_ = features
 
 	var device models.Device
-	err := s.db.Where("device_id = ?", deviceID).First(&device).Error
+	err := s.db.Where("user_id = ? AND device_id = ?", user.ID, deviceID).First(&device).Error
 	if err == nil {
 		device.UserID = user.ID
 		device.Status = models.DeviceStatusActive

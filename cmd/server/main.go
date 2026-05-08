@@ -39,7 +39,8 @@ func main() {
 		log.Fatalf("ensure admin: %v", err)
 	}
 
-	authSvc := services.NewAuthService(db, cfg.JWTSecret, planSvc)
+	emailSvc := services.NewEmailService(cfg.Email)
+	authSvc := services.NewAuthService(db, cfg.JWTSecret, planSvc, emailSvc, cfg.AppEnv)
 	deviceSvc := services.NewDeviceService(db)
 	authFileSvc := services.NewAuthFileService(db, storageSvc)
 	appReleaseSvc := services.NewAppReleaseService(cfg.StorageRoot, cfg.PublicBaseURL)

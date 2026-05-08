@@ -9,6 +9,7 @@ import (
 )
 
 const userContextKey = "auth_user"
+const authClaimsContextKey = "auth_claims"
 
 type AuthMiddleware struct {
 	authSvc *services.AuthService
@@ -28,19 +29,26 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		}
 
 		token := strings.TrimSpace(authHeader[len("Bearer "):])
-		userID, err := m.authSvc.ParseToken(token)
+		claims, err := m.authSvc.ParseToken(token)
 		if err != nil {
 			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
 			return
 		}
 
-		user, err := m.userSvc.FindByID(userID)
+		user, err := m.userSvc.FindByID(claims.UserID)
 		if err != nil {
 			c.AbortWithStatusJSON(401, gin.H{"error": "user not found"})
 			return
 		}
+		if user.Role != models.UserRoleAdmin {
+			if claims.DeviceID == "" || user.ActiveDeviceID == nil || *user.ActiveDeviceID != claims.DeviceID || user.SessionVersion != claims.SessionVersion {
+				c.AbortWithStatusJSON(401, gin.H{"error": "session expired"})
+				return
+			}
+		}
 
 		c.Set(userContextKey, user)
+		c.Set(authClaimsContextKey, claims)
 		c.Next()
 	}
 }
@@ -52,4 +60,13 @@ func CurrentUser(c *gin.Context) *models.User {
 	}
 	user, _ := value.(*models.User)
 	return user
+}
+
+func CurrentClaims(c *gin.Context) *services.SessionClaims {
+	value, ok := c.Get(authClaimsContextKey)
+	if !ok {
+		return nil
+	}
+	claims, _ := value.(*services.SessionClaims)
+	return claims
 }

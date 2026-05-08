@@ -51,55 +51,127 @@ func (h *Handler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	user, err := h.authSvc.Register(strings.TrimSpace(strings.ToLower(req.Email)), req.Password)
+	challenge, err := h.authSvc.BeginRegister(strings.TrimSpace(strings.ToLower(req.Email)), req.Password)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"user": user})
+	payload := gin.H{
+		"status":       "verification_required",
+		"challenge_id": challenge.ChallengeID,
+		"masked_email": challenge.MaskedEmail,
+		"expires_at":   challenge.ExpiresAt,
+	}
+	if challenge.DebugCode != "" {
+		payload["debug_code"] = challenge.DebugCode
+	}
+	c.JSON(http.StatusAccepted, payload)
 }
 
-func (h *Handler) Login(c *gin.Context) {
+func (h *Handler) VerifyRegister(c *gin.Context) {
 	var req struct {
-		Email      string `json:"email"`
-		Password   string `json:"password"`
-		DeviceID   string `json:"device_id"`
-		DeviceName string `json:"device_name"`
-		Platform   string `json:"platform"`
+		Email       string `json:"email"`
+		ChallengeID string `json:"challenge_id"`
+		Code        string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	user, token, err := h.authSvc.Login(strings.TrimSpace(strings.ToLower(req.Email)), req.Password)
+	user, err := h.authSvc.VerifyRegister(strings.TrimSpace(strings.ToLower(req.Email)), req.ChallengeID, req.Code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"status": "ok", "user": user})
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	var req struct {
+		Email       string `json:"email"`
+		Password    string `json:"password"`
+		DeviceID    string `json:"device_id"`
+		DeviceName  string `json:"device_name"`
+		Platform    string `json:"platform"`
+		TrustDevice bool   `json:"trust_device"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	login, challenge, err := h.authSvc.BeginPasswordLogin(strings.TrimSpace(strings.ToLower(req.Email)), req.Password, req.DeviceID, req.DeviceName, req.Platform, req.TrustDevice)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	plan, features, err := h.planSvc.ResolveUserPlan(user)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	var expiresAt *time.Time
-	if user.Role != models.UserRoleAdmin {
-		if sub, _, err := h.planSvc.GetActiveSubscription(user.ID); err == nil && sub != nil {
-			expiresAt = sub.ExpiresAt
+	if challenge != nil {
+		payload := gin.H{
+			"status":       "verification_required",
+			"challenge_id": challenge.ChallengeID,
+			"masked_email": challenge.MaskedEmail,
+			"expires_at":   challenge.ExpiresAt,
 		}
-	}
-	device, err := h.deviceSvc.RegisterOrTouch(user, features, req.DeviceID, req.DeviceName, req.Platform)
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		if challenge.DebugCode != "" {
+			payload["debug_code"] = challenge.DebugCode
+		}
+		c.JSON(http.StatusAccepted, payload)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"token":    token,
-		"user":     user,
-		"plan":     plan,
-		"features": features,
-		"expiresAt": expiresAt,
-		"device":   device,
-	})
+	h.writeLoginSuccess(c, login)
+}
+
+func (h *Handler) VerifyLogin(c *gin.Context) {
+	var req struct {
+		Email               string `json:"email"`
+		ChallengeID         string `json:"challenge_id"`
+		Code                string `json:"code"`
+		TrustDevice         bool   `json:"trust_device"`
+		ForceLogoutExisting bool   `json:"force_logout_existing"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	login, conflict, err := h.authSvc.VerifyLoginChallenge(
+		strings.TrimSpace(strings.ToLower(req.Email)),
+		req.ChallengeID,
+		req.Code,
+		req.TrustDevice,
+		req.ForceLogoutExisting,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if conflict != nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"status":        "conflict",
+			"active_device": conflict,
+			"error":         "device already active elsewhere",
+		})
+		return
+	}
+	h.writeLoginSuccess(c, login)
+}
+
+func (h *Handler) TrustedDeviceLogin(c *gin.Context) {
+	var req struct {
+		Email        string `json:"email"`
+		DeviceID     string `json:"device_id"`
+		DeviceName   string `json:"device_name"`
+		Platform     string `json:"platform"`
+		TrustedToken string `json:"trusted_token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	login, err := h.authSvc.LoginTrustedDevice(strings.TrimSpace(strings.ToLower(req.Email)), req.DeviceID, req.TrustedToken, req.DeviceName, req.Platform)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	h.writeLoginSuccess(c, login)
 }
 
 func (h *Handler) Me(c *gin.Context) {
@@ -116,9 +188,9 @@ func (h *Handler) Me(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"user":     user,
-		"plan":     plan,
-		"features": features,
+		"user":      user,
+		"plan":      plan,
+		"features":  features,
 		"expiresAt": expiresAt,
 	})
 }
@@ -140,6 +212,24 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (h *Handler) Logout(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	claims := middleware.CurrentClaims(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+		return
+	}
+	deviceID := ""
+	if claims != nil {
+		deviceID = claims.DeviceID
+	}
+	if err := h.authSvc.Logout(user.ID, deviceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func (h *Handler) MyPlan(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	plan, _, err := h.planSvc.ResolveUserPlan(user)
@@ -148,6 +238,38 @@ func (h *Handler) MyPlan(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"plan": plan})
+}
+
+func (h *Handler) writeLoginSuccess(c *gin.Context, login *services.LoginSuccess) {
+	if login == nil || login.User == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid login state"})
+		return
+	}
+	plan, features, err := h.planSvc.ResolveUserPlan(login.User)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	var expiresAt *time.Time
+	if login.User.Role != models.UserRoleAdmin {
+		if sub, _, err := h.planSvc.GetActiveSubscription(login.User.ID); err == nil && sub != nil {
+			expiresAt = sub.ExpiresAt
+		}
+	}
+	response := gin.H{
+		"status":    "ok",
+		"token":     login.Token,
+		"user":      login.User,
+		"plan":      plan,
+		"features":  features,
+		"expiresAt": expiresAt,
+		"device":    login.Device,
+	}
+	if login.TrustedToken != "" {
+		response["trusted_token"] = login.TrustedToken
+		response["trusted_until"] = login.TrustedUntil
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) MyFeatures(c *gin.Context) {

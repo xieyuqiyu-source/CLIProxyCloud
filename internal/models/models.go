@@ -83,13 +83,15 @@ const (
 )
 
 type User struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	Email        string    `gorm:"size:190;uniqueIndex;not null" json:"email"`
-	PasswordHash string    `gorm:"size:255;not null" json:"-"`
-	Role         UserRole  `gorm:"size:32;not null;default:user" json:"role"`
-	Status       string    `gorm:"size:32;not null;default:active" json:"status"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Email          string    `gorm:"size:190;uniqueIndex;not null" json:"email"`
+	PasswordHash   string    `gorm:"size:255;not null" json:"-"`
+	Role           UserRole  `gorm:"size:32;not null;default:user" json:"role"`
+	Status         string    `gorm:"size:32;not null;default:active" json:"status"`
+	ActiveDeviceID *string   `gorm:"size:191;index" json:"activeDeviceId"`
+	SessionVersion uint64    `gorm:"not null;default:0" json:"sessionVersion"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type Plan struct {
@@ -114,15 +116,46 @@ type UserSubscription struct {
 }
 
 type Device struct {
-	ID         uint         `gorm:"primaryKey" json:"id"`
-	UserID     uint         `gorm:"index;not null" json:"userId"`
-	DeviceID   string       `gorm:"size:191;not null;uniqueIndex:idx_user_device" json:"deviceId"`
-	DeviceName string       `gorm:"size:191;not null" json:"deviceName"`
-	Platform   string       `gorm:"size:64;not null" json:"platform"`
-	Status     DeviceStatus `gorm:"size:32;not null;default:active" json:"status"`
-	LastSeenAt time.Time    `gorm:"not null" json:"lastSeenAt"`
-	CreatedAt  time.Time    `json:"createdAt"`
-	UpdatedAt  time.Time    `json:"updatedAt"`
+	ID               uint         `gorm:"primaryKey" json:"id"`
+	UserID           uint         `gorm:"index;not null" json:"userId"`
+	DeviceID         string       `gorm:"size:191;not null;uniqueIndex:idx_user_device" json:"deviceId"`
+	DeviceName       string       `gorm:"size:191;not null" json:"deviceName"`
+	Platform         string       `gorm:"size:64;not null" json:"platform"`
+	Status           DeviceStatus `gorm:"size:32;not null;default:active" json:"status"`
+	TrustedTokenHash *string      `gorm:"size:128" json:"-"`
+	TrustedUntil     *time.Time   `json:"trustedUntil"`
+	LastVerifiedAt   *time.Time   `json:"lastVerifiedAt"`
+	LastLoginAt      *time.Time   `json:"lastLoginAt"`
+	LastSeenAt       time.Time    `gorm:"not null" json:"lastSeenAt"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	UpdatedAt        time.Time    `json:"updatedAt"`
+}
+
+type LoginVerification struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	ChallengeID string     `gorm:"size:64;uniqueIndex;not null" json:"challengeId"`
+	UserID      uint       `gorm:"index;not null" json:"userId"`
+	Email       string     `gorm:"size:190;index;not null" json:"email"`
+	DeviceID    string     `gorm:"size:191;index;not null" json:"deviceId"`
+	DeviceName  string     `gorm:"size:191;not null" json:"deviceName"`
+	Platform    string     `gorm:"size:64;not null" json:"platform"`
+	CodeHash    string     `gorm:"size:128;not null" json:"-"`
+	ExpiresAt   time.Time  `gorm:"index;not null" json:"expiresAt"`
+	ConsumedAt  *time.Time `json:"consumedAt"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+type RegistrationVerification struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	ChallengeID  string     `gorm:"size:64;uniqueIndex;not null" json:"challengeId"`
+	Email        string     `gorm:"size:190;index;not null" json:"email"`
+	PasswordHash string     `gorm:"size:255;not null" json:"-"`
+	CodeHash     string     `gorm:"size:128;not null" json:"-"`
+	ExpiresAt    time.Time  `gorm:"index;not null" json:"expiresAt"`
+	ConsumedAt   *time.Time `json:"consumedAt"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 type AuthFile struct {

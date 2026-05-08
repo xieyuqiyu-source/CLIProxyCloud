@@ -49,12 +49,16 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 	{
 		auth := v1.Group("/auth")
 		auth.POST("/register", handler.Register)
+		auth.POST("/register/verify", handler.VerifyRegister)
 		auth.POST("/login", handler.Login)
+		auth.POST("/login/verify", handler.VerifyLogin)
+		auth.POST("/device-login", handler.TrustedDeviceLogin)
 		v1.POST("/pay/xunhu/notify", handler.XunhuPaymentNotify)
 
 		protected := v1.Group("/")
 		protected.Use(authMiddleware.RequireAuth())
 		protected.GET("/me", handler.Me)
+		protected.POST("/me/logout", handler.Logout)
 		protected.POST("/me/change-password", handler.ChangePassword)
 		protected.GET("/me/plan", handler.MyPlan)
 		protected.GET("/me/features", handler.MyFeatures)
