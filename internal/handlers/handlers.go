@@ -940,6 +940,40 @@ func (h *Handler) AdminAssignPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (h *Handler) AdminUpdateUserRole(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if err := h.userSvc.RequireAdmin(user); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	role := models.UserRole(strings.ToLower(strings.TrimSpace(req.Role)))
+	if role != models.UserRoleUser && role != models.UserRoleAdmin {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be user or admin"})
+		return
+	}
+
+	if err := h.userSvc.UpdateRole(uint(userID), role); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func (h *Handler) AdminUploadAppRelease(c *gin.Context) {
 	version := strings.TrimSpace(c.PostForm("version"))
 	notes := strings.TrimSpace(c.PostForm("notes"))

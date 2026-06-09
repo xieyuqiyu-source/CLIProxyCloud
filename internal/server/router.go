@@ -93,6 +93,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		admin.DELETE("/shared-auth-files", handler.AdminDeleteAllSharedAuthFiles)
 		admin.DELETE("/shared-auth-files/:id", handler.AdminDeleteSharedAuthFile)
 		admin.PATCH("/users/:id/plan", handler.AdminAssignPlan)
+		admin.PATCH("/users/:id/role", handler.AdminUpdateUserRole)
 	}
 
 	return router

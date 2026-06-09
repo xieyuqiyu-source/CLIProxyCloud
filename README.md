@@ -155,6 +155,7 @@ Notes:
 - `DELETE /api/v1/admin/shared-auth-files`
 - `DELETE /api/v1/admin/shared-auth-files/:id`
 - `PATCH /api/v1/admin/users/:id/plan`
+- `PATCH /api/v1/admin/users/:id/role`
 
 ### App Update Packages
 
