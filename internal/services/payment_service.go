@@ -105,7 +105,7 @@ func DefaultPaymentProducts() []PaymentProductInput {
 			DurationDays: 30,
 			Status:       models.PaymentProductStatusActive,
 			SortOrder:    20,
-			Description:  "可开通 Pro Max 套餐，支持完整共享号池、自动切换和个人云同步。",
+			Description:  "可开通 Pro Max 套餐，支持最多 10 个共享认证文件、自动切换和个人云同步。",
 		},
 	}
 }

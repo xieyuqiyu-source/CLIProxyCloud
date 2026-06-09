@@ -69,8 +69,12 @@ func (s *AuthFileService) ListSharedByStrategy(features FeatureFlags) ([]models.
 		return []models.AuthFile{}, nil
 	}
 
-	if features.SharedPoolMode != "sample" || features.SharedPoolMaxFiles <= 0 || len(files) <= features.SharedPoolMaxFiles {
+	if features.SharedPoolMaxFiles <= 0 || len(files) <= features.SharedPoolMaxFiles {
 		return files, nil
+	}
+
+	if features.SharedPoolMode != "sample" {
+		return files[:features.SharedPoolMaxFiles], nil
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))

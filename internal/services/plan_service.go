@@ -11,11 +11,11 @@ import (
 )
 
 type FeatureFlags struct {
-	MaxEnabledAuthFiles    int  `json:"max_enabled_auth_files"`
-	AllowAutoRotation      bool `json:"allow_auto_rotation"`
-	AllowPersonalCloudSync bool `json:"allow_personal_cloud_sync"`
-	AllowSharedPool        bool `json:"allow_shared_pool"`
-	MaxDevices             int  `json:"max_devices"`
+	MaxEnabledAuthFiles    int    `json:"max_enabled_auth_files"`
+	AllowAutoRotation      bool   `json:"allow_auto_rotation"`
+	AllowPersonalCloudSync bool   `json:"allow_personal_cloud_sync"`
+	AllowSharedPool        bool   `json:"allow_shared_pool"`
+	MaxDevices             int    `json:"max_devices"`
 	SharedPoolMode         string `json:"shared_pool_mode"`
 	SharedPoolMaxFiles     int    `json:"shared_pool_max_files"`
 	SharedPoolRefreshMins  int    `json:"shared_pool_refresh_minutes"`
@@ -69,7 +69,7 @@ func DefaultPlans() map[string]struct {
 		},
 		"vip2": {
 			Name:        "Pro Max",
-			Description: "支持 VIP1 全部功能，并可下载共享认证文件",
+			Description: "支持 VIP1 全部功能，并可同步最多 10 个共享认证文件",
 			Features: FeatureFlags{
 				MaxEnabledAuthFiles:    999,
 				AllowAutoRotation:      true,
@@ -77,7 +77,7 @@ func DefaultPlans() map[string]struct {
 				AllowSharedPool:        true,
 				MaxDevices:             1,
 				SharedPoolMode:         "full",
-				SharedPoolMaxFiles:     999,
+				SharedPoolMaxFiles:     10,
 				SharedPoolRefreshMins:  0,
 			},
 		},
