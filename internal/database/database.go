@@ -35,5 +35,7 @@ func Migrate(db *gorm.DB) error {
 		&models.PaymentProduct{},
 		&models.PaymentOrder{},
 		&models.PaymentCallback{},
+		&models.AgentHeartbeat{},
+		&models.AgentTask{},
 	)
 }

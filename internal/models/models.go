@@ -82,6 +82,22 @@ const (
 	PaymentPurchaseModeUpgradeReplaceMonth PaymentPurchaseMode = "upgrade_replace_month"
 )
 
+type AgentTaskType string
+
+const (
+	AgentTaskTypeCheckSharedPool AgentTaskType = "check_shared_pool"
+)
+
+type AgentTaskStatus string
+
+const (
+	AgentTaskStatusPending   AgentTaskStatus = "pending"
+	AgentTaskStatusRunning   AgentTaskStatus = "running"
+	AgentTaskStatusCompleted AgentTaskStatus = "completed"
+	AgentTaskStatusFailed    AgentTaskStatus = "failed"
+	AgentTaskStatusExpired   AgentTaskStatus = "expired"
+)
+
 type User struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	Email          string    `gorm:"size:190;uniqueIndex;not null" json:"email"`
@@ -250,4 +266,30 @@ type PaymentCallback struct {
 	Payload         datatypes.JSON  `gorm:"type:json" json:"payload"`
 	Status          string          `gorm:"size:32;not null" json:"status"`
 	CreatedAt       time.Time       `json:"createdAt"`
+}
+
+type AgentHeartbeat struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	UserID     uint      `gorm:"uniqueIndex;not null" json:"userId"`
+	DeviceID   string    `gorm:"size:191;not null;default:''" json:"deviceId"`
+	DeviceName string    `gorm:"size:191;not null;default:''" json:"deviceName"`
+	Status     string    `gorm:"size:32;not null;default:online" json:"status"`
+	LastPollAt time.Time `gorm:"index;not null" json:"lastPollAt"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+type AgentTask struct {
+	ID           uint            `gorm:"primaryKey" json:"id"`
+	UserID       uint            `gorm:"index;not null" json:"userId"`
+	Type         AgentTaskType   `gorm:"size:64;index;not null" json:"type"`
+	Status       AgentTaskStatus `gorm:"size:32;index;not null;default:pending" json:"status"`
+	Payload      datatypes.JSON  `gorm:"type:json" json:"payload"`
+	Result       datatypes.JSON  `gorm:"type:json" json:"result"`
+	ErrorMessage string          `gorm:"type:text" json:"errorMessage"`
+	ClaimedAt    *time.Time      `json:"claimedAt"`
+	CompletedAt  *time.Time      `json:"completedAt"`
+	ExpiresAt    time.Time       `gorm:"index;not null" json:"expiresAt"`
+	CreatedAt    time.Time       `json:"createdAt"`
+	UpdatedAt    time.Time       `json:"updatedAt"`
 }

@@ -20,6 +20,7 @@ type Handler struct {
 	authFileSvc   *services.AuthFileService
 	appReleaseSvc *services.AppReleaseService
 	paymentSvc    *services.PaymentService
+	agentTaskSvc  *services.AgentTaskService
 }
 
 func New(
@@ -30,6 +31,7 @@ func New(
 	authFileSvc *services.AuthFileService,
 	appReleaseSvc *services.AppReleaseService,
 	paymentSvc *services.PaymentService,
+	agentTaskSvc *services.AgentTaskService,
 ) *Handler {
 	return &Handler{
 		authSvc:       authSvc,
@@ -39,6 +41,7 @@ func New(
 		authFileSvc:   authFileSvc,
 		appReleaseSvc: appReleaseSvc,
 		paymentSvc:    paymentSvc,
+		agentTaskSvc:  agentTaskSvc,
 	}
 }
 
