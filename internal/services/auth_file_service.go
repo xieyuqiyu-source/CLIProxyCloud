@@ -1,6 +1,9 @@
 package services
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -17,6 +20,11 @@ import (
 type AuthFileService struct {
 	db      *gorm.DB
 	storage *storage.Storage
+}
+
+type AuthFileUploadResult struct {
+	Files   []models.AuthFile `json:"files"`
+	Skipped []string          `json:"skipped"`
 }
 
 func NewAuthFileService(db *gorm.DB, storage *storage.Storage) *AuthFileService {
@@ -86,6 +94,20 @@ func (s *AuthFileService) ListSharedByStrategy(features FeatureFlags) ([]models.
 }
 
 func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader) (*models.AuthFile, error) {
+	result, err := s.UploadMany(ownerType, ownerUserID, sourceType, planRequired, fileHeader)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Files) == 0 {
+		if len(result.Skipped) > 0 {
+			return nil, fmt.Errorf("no valid JSON credential files found: %s", strings.Join(result.Skipped, "; "))
+		}
+		return nil, fmt.Errorf("no valid JSON credential files found")
+	}
+	return &result.Files[0], nil
+}
+
+func (s *AuthFileService) UploadMany(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader) (*AuthFileUploadResult, error) {
 	if fileHeader == nil {
 		return nil, fmt.Errorf("file is required")
 	}
@@ -101,19 +123,136 @@ func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *ui
 		return nil, err
 	}
 
+	entries, skipped, err := extractAuthJSONFiles(fileHeader.Filename, content)
+	if err != nil {
+		return nil, err
+	}
+	result := &AuthFileUploadResult{Skipped: skipped}
+	for _, entry := range entries {
+		authFile, err := s.uploadBytes(ownerType, ownerUserID, sourceType, planRequired, entry.name, entry.content)
+		if err != nil {
+			result.Skipped = append(result.Skipped, fmt.Sprintf("%s: %s", entry.name, err.Error()))
+			continue
+		}
+		result.Files = append(result.Files, *authFile)
+	}
+	if len(result.Files) == 0 {
+		return result, fmt.Errorf("no valid JSON credential files found")
+	}
+	return result, nil
+}
+
+type extractedAuthFile struct {
+	name    string
+	content []byte
+}
+
+func extractAuthJSONFiles(fileName string, content []byte) ([]extractedAuthFile, []string, error) {
+	lowerName := strings.ToLower(fileName)
+	if strings.HasSuffix(lowerName, ".zip") {
+		return extractAuthJSONFilesFromZip(content)
+	}
+	if !json.Valid(content) {
+		return nil, []string{fmt.Sprintf("%s: invalid JSON", fileName)}, nil
+	}
+	return []extractedAuthFile{{
+		name:    normalizeAuthUploadFileName(filepath.Base(fileName)),
+		content: content,
+	}}, nil, nil
+}
+
+func extractAuthJSONFilesFromZip(content []byte) ([]extractedAuthFile, []string, error) {
+	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read zip file: %w", err)
+	}
+
+	var entries []extractedAuthFile
+	var skipped []string
+	seenNames := map[string]int{}
+	for _, item := range reader.File {
+		if item.FileInfo().IsDir() {
+			continue
+		}
+		name := filepath.Base(item.Name)
+		if name == "." || name == "" {
+			continue
+		}
+
+		file, err := item.Open()
+		if err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: %s", item.Name, err.Error()))
+			continue
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, 16*1024*1024+1))
+		_ = file.Close()
+		if readErr != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: %s", item.Name, readErr.Error()))
+			continue
+		}
+		if len(data) > 16*1024*1024 {
+			skipped = append(skipped, fmt.Sprintf("%s: file too large", item.Name))
+			continue
+		}
+		if !json.Valid(data) {
+			skipped = append(skipped, fmt.Sprintf("%s: invalid JSON", item.Name))
+			continue
+		}
+
+		uploadName := normalizeAuthUploadFileName(name)
+		nameCount := seenNames[uploadName]
+		if nameCount > 0 {
+			ext := filepath.Ext(uploadName)
+			base := strings.TrimSuffix(uploadName, ext)
+			uploadName = fmt.Sprintf("%s-%d%s", base, nameCount+1, ext)
+		}
+		seenNames[normalizeAuthUploadFileName(name)]++
+		entries = append(entries, extractedAuthFile{name: uploadName, content: data})
+	}
+	if len(entries) == 0 {
+		skipped = append(skipped, "zip: no valid JSON credential files found")
+	}
+	return entries, skipped, nil
+}
+
+func normalizeAuthUploadFileName(name string) string {
+	trimmed := strings.TrimSpace(filepath.Base(name))
+	if trimmed == "" || trimmed == "." {
+		trimmed = fmt.Sprintf("credential-%d", time.Now().UnixNano())
+	}
+	if strings.HasSuffix(strings.ToLower(trimmed), ".json") {
+		return trimmed
+	}
+	ext := filepath.Ext(trimmed)
+	base := strings.TrimSuffix(trimmed, ext)
+	if base == "" {
+		base = strings.TrimPrefix(trimmed, ".")
+	}
+	if base == "" {
+		base = "credential"
+	}
+	return base + ".json"
+}
+
+func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileName string, content []byte) (*models.AuthFile, error) {
+	if !json.Valid(content) {
+		return nil, fmt.Errorf("invalid JSON")
+	}
+	fileName = normalizeAuthUploadFileName(fileName)
+
 	scope := string(ownerType)
 	if ownerUserID != nil {
 		scope = fmt.Sprintf("%s/%d", ownerType, *ownerUserID)
 	}
-	path, hash, err := s.storage.Save(scope, fileHeader.Filename, content)
+	path, hash, err := s.storage.Save(scope, fileName, content)
 	if err != nil {
 		return nil, err
 	}
-	displayName := strings.TrimSuffix(filepath.Base(fileHeader.Filename), filepath.Ext(fileHeader.Filename))
-	provider := detectProvider(fileHeader.Filename)
+	displayName := strings.TrimSuffix(filepath.Base(fileName), filepath.Ext(fileName))
+	provider := detectProvider(fileName)
 
 	var existing models.AuthFile
-	query := s.db.Where("owner_type = ? AND file_name = ?", ownerType, fileHeader.Filename)
+	query := s.db.Where("owner_type = ? AND file_name = ?", ownerType, fileName)
 	if ownerUserID == nil {
 		query = query.Where("owner_user_id IS NULL")
 	} else {
@@ -160,7 +299,7 @@ func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *ui
 		OwnerType:    ownerType,
 		OwnerUserID:  ownerUserID,
 		Provider:     provider,
-		FileName:     fileHeader.Filename,
+		FileName:     fileName,
 		StoragePath:  path,
 		FileHash:     hash,
 		Encrypted:    true,

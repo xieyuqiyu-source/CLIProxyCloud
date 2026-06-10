@@ -612,12 +612,21 @@ func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
 		return
 	}
 	planCode := "vip2"
-	authFile, err := h.authFileSvc.Upload(models.AuthOwnerTypeShared, nil, models.AuthSourceShared, &planCode, file)
+	result, err := h.authFileSvc.UploadMany(models.AuthOwnerTypeShared, nil, models.AuthSourceShared, &planCode, file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"file": authFile})
+	var firstFile any
+	if len(result.Files) > 0 {
+		firstFile = result.Files[0]
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"file":     firstFile,
+		"files":    result.Files,
+		"uploaded": len(result.Files),
+		"skipped":  result.Skipped,
+	})
 }
 
 func (h *Handler) AdminDeleteSharedAuthFile(c *gin.Context) {
