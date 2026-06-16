@@ -79,6 +79,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		protected.GET("/shared/auth-files", handler.ListSharedAuthFiles)
 		protected.GET("/shared/auth-files/sync-package", handler.SharedAuthSyncPackage)
 		protected.GET("/shared/auth-files/:id/download", handler.DownloadSharedAuthFile)
+		protected.POST("/shared/quota-cards/:id/consume", handler.ConsumeSharedQuotaCard)
 		protected.GET("/agent/tasks/poll", handler.AgentPollTask)
 		protected.POST("/agent/tasks/:id/result", handler.AgentSubmitTaskResult)
 

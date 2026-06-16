@@ -15,6 +15,7 @@ import (
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/models"
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/storage"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AuthFileService struct {
@@ -25,6 +26,12 @@ type AuthFileService struct {
 type AuthFileUploadResult struct {
 	Files   []models.AuthFile `json:"files"`
 	Skipped []string          `json:"skipped"`
+}
+
+type AuthFileUploadOptions struct {
+	DistributionMode models.AuthDistributionMode
+	QuotaLimit       int64
+	QuotaResetAt     *time.Time
 }
 
 func NewAuthFileService(db *gorm.DB, storage *storage.Storage) *AuthFileService {
@@ -94,7 +101,7 @@ func (s *AuthFileService) ListSharedByStrategy(features FeatureFlags) ([]models.
 }
 
 func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader) (*models.AuthFile, error) {
-	result, err := s.UploadMany(ownerType, ownerUserID, sourceType, planRequired, fileHeader)
+	result, err := s.UploadMany(ownerType, ownerUserID, sourceType, planRequired, fileHeader, AuthFileUploadOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +114,7 @@ func (s *AuthFileService) Upload(ownerType models.AuthOwnerType, ownerUserID *ui
 	return &result.Files[0], nil
 }
 
-func (s *AuthFileService) UploadMany(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader) (*AuthFileUploadResult, error) {
+func (s *AuthFileService) UploadMany(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileHeader *multipart.FileHeader, options AuthFileUploadOptions) (*AuthFileUploadResult, error) {
 	if fileHeader == nil {
 		return nil, fmt.Errorf("file is required")
 	}
@@ -129,7 +136,7 @@ func (s *AuthFileService) UploadMany(ownerType models.AuthOwnerType, ownerUserID
 	}
 	result := &AuthFileUploadResult{Skipped: skipped}
 	for _, entry := range entries {
-		authFile, err := s.uploadBytes(ownerType, ownerUserID, sourceType, planRequired, entry.name, entry.content)
+		authFile, err := s.uploadBytes(ownerType, ownerUserID, sourceType, planRequired, entry.name, entry.content, normalizeAuthUploadOptions(options))
 		if err != nil {
 			result.Skipped = append(result.Skipped, fmt.Sprintf("%s: %s", entry.name, err.Error()))
 			continue
@@ -140,6 +147,18 @@ func (s *AuthFileService) UploadMany(ownerType models.AuthOwnerType, ownerUserID
 		return result, fmt.Errorf("no valid JSON credential files found")
 	}
 	return result, nil
+}
+
+func normalizeAuthUploadOptions(options AuthFileUploadOptions) AuthFileUploadOptions {
+	switch options.DistributionMode {
+	case models.AuthDistributionQuotaCard:
+	default:
+		options.DistributionMode = models.AuthDistributionPlain
+	}
+	if options.QuotaLimit < 0 {
+		options.QuotaLimit = 0
+	}
+	return options
 }
 
 type extractedAuthFile struct {
@@ -234,7 +253,7 @@ func normalizeAuthUploadFileName(name string) string {
 	return base + ".json"
 }
 
-func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileName string, content []byte) (*models.AuthFile, error) {
+func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserID *uint, sourceType models.AuthSourceType, planRequired *string, fileName string, content []byte, options AuthFileUploadOptions) (*models.AuthFile, error) {
 	if !json.Valid(content) {
 		return nil, fmt.Errorf("invalid JSON")
 	}
@@ -270,6 +289,13 @@ func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserI
 		existing.SourceType = sourceType
 		existing.PlanRequired = planRequired
 		existing.DisplayName = displayName
+		existing.DistributionMode = options.DistributionMode
+		existing.QuotaLimit = options.QuotaLimit
+		existing.QuotaResetAt = options.QuotaResetAt
+		if existing.DistributionMode != models.AuthDistributionQuotaCard {
+			existing.QuotaUsed = 0
+			existing.QuotaResetAt = nil
+		}
 		if err := s.db.Save(&existing).Error; err != nil {
 			return nil, err
 		}
@@ -296,17 +322,20 @@ func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserI
 	}
 
 	authFile := &models.AuthFile{
-		OwnerType:    ownerType,
-		OwnerUserID:  ownerUserID,
-		Provider:     provider,
-		FileName:     fileName,
-		StoragePath:  path,
-		FileHash:     hash,
-		Encrypted:    true,
-		Status:       "active",
-		SourceType:   sourceType,
-		PlanRequired: planRequired,
-		DisplayName:  displayName,
+		OwnerType:        ownerType,
+		OwnerUserID:      ownerUserID,
+		Provider:         provider,
+		FileName:         fileName,
+		StoragePath:      path,
+		FileHash:         hash,
+		Encrypted:        true,
+		Status:           "active",
+		SourceType:       sourceType,
+		PlanRequired:     planRequired,
+		DisplayName:      displayName,
+		DistributionMode: options.DistributionMode,
+		QuotaLimit:       options.QuotaLimit,
+		QuotaResetAt:     options.QuotaResetAt,
 	}
 	if err := s.db.Create(authFile).Error; err != nil {
 		return nil, err
@@ -350,6 +379,34 @@ func (s *AuthFileService) ReadContent(file *models.AuthFile) ([]byte, error) {
 		return nil, fmt.Errorf("auth file is required")
 	}
 	return s.storage.Read(file.StoragePath)
+}
+
+func (s *AuthFileService) ConsumeQuotaCard(authFileID uint, units int64) (*models.AuthFile, error) {
+	if units <= 0 {
+		units = 1
+	}
+
+	var file models.AuthFile
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND owner_type = ?", authFileID, models.AuthOwnerTypeShared).
+			First(&file).Error; err != nil {
+			return err
+		}
+		if file.DistributionMode != models.AuthDistributionQuotaCard {
+			return fmt.Errorf("shared auth file is not a quota card")
+		}
+		if file.QuotaLimit > 0 && file.QuotaUsed+units > file.QuotaLimit {
+			return fmt.Errorf("quota card limit exceeded")
+		}
+		file.QuotaUsed += units
+		return tx.Save(&file).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
 }
 
 func (s *AuthFileService) DeletePersonal(userID uint, authFileID uint) error {

@@ -591,6 +591,10 @@ func (h *Handler) DownloadSharedAuthFile(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "shared auth file not found"})
 		return
 	}
+	if file.DistributionMode == models.AuthDistributionQuotaCard {
+		c.JSON(http.StatusForbidden, gin.H{"error": "encrypted quota card credentials can only be used through the cloud proxy"})
+		return
+	}
 	content, err := h.authFileSvc.ReadContent(file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -612,7 +616,8 @@ func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
 		return
 	}
 	planCode := "vip2"
-	result, err := h.authFileSvc.UploadMany(models.AuthOwnerTypeShared, nil, models.AuthSourceShared, &planCode, file)
+	options := parseSharedAuthUploadOptions(c)
+	result, err := h.authFileSvc.UploadMany(models.AuthOwnerTypeShared, nil, models.AuthSourceShared, &planCode, file, options)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -627,6 +632,65 @@ func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
 		"uploaded": len(result.Files),
 		"skipped":  result.Skipped,
 	})
+}
+
+func parseSharedAuthUploadOptions(c *gin.Context) services.AuthFileUploadOptions {
+	mode := models.AuthDistributionMode(strings.TrimSpace(c.PostForm("distribution_mode")))
+	if mode == "" {
+		mode = models.AuthDistributionMode(strings.TrimSpace(c.PostForm("distributionMode")))
+	}
+	options := services.AuthFileUploadOptions{DistributionMode: mode}
+	if quotaRaw := strings.TrimSpace(c.PostForm("quota_limit")); quotaRaw == "" {
+		quotaRaw = strings.TrimSpace(c.PostForm("quotaLimit"))
+		if parsed, err := strconv.ParseInt(quotaRaw, 10, 64); err == nil {
+			options.QuotaLimit = parsed
+		}
+	} else if parsed, err := strconv.ParseInt(quotaRaw, 10, 64); err == nil {
+		options.QuotaLimit = parsed
+	}
+	if resetRaw := strings.TrimSpace(c.PostForm("quota_reset_at")); resetRaw == "" {
+		resetRaw = strings.TrimSpace(c.PostForm("quotaResetAt"))
+		if parsed, err := time.Parse(time.RFC3339, resetRaw); err == nil {
+			options.QuotaResetAt = &parsed
+		}
+	} else if parsed, err := time.Parse(time.RFC3339, resetRaw); err == nil {
+		options.QuotaResetAt = &parsed
+	}
+	return options
+}
+
+func (h *Handler) ConsumeSharedQuotaCard(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	_, features, err := h.planSvc.ResolveUserPlan(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !features.AllowSharedPool && user.Role != models.UserRoleAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "your plan does not allow shared auth files"})
+		return
+	}
+	authFileID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req struct {
+		Units int64 `json:"units"`
+	}
+	if c.Request.Body != nil {
+		_ = c.ShouldBindJSON(&req)
+	}
+	file, err := h.authFileSvc.ConsumeQuotaCard(uint(authFileID), req.Units)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "exceeded") {
+			status = http.StatusPaymentRequired
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"file": file})
 }
 
 func (h *Handler) AdminDeleteSharedAuthFile(c *gin.Context) {
