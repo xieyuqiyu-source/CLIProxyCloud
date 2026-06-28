@@ -54,6 +54,8 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		auth.POST("/login/verify", handler.VerifyLogin)
 		auth.POST("/device-login", handler.TrustedDeviceLogin)
 		v1.POST("/pay/xunhu/notify", handler.XunhuPaymentNotify)
+		v1.POST("/quota-cards/:id/check", handler.CheckQuotaCard)
+		v1.POST("/quota-cards/:id/usage", handler.ReportQuotaCardUsage)
 
 		protected := v1.Group("/")
 		protected.Use(authMiddleware.RequireAuth())

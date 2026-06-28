@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -592,7 +593,13 @@ func (h *Handler) DownloadSharedAuthFile(c *gin.Context) {
 		return
 	}
 	if file.DistributionMode == models.AuthDistributionQuotaCard {
-		c.JSON(http.StatusForbidden, gin.H{"error": "encrypted quota card credentials can only be used through the cloud proxy"})
+		content, fileName, err := h.authFileSvc.BuildQuotaCardPackage(file, publicBaseURL(c))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Header("Content-Disposition", "attachment; filename="+fileName)
+		c.Data(http.StatusOK, "application/json", content)
 		return
 	}
 	content, err := h.authFileSvc.ReadContent(file)
@@ -602,6 +609,28 @@ func (h *Handler) DownloadSharedAuthFile(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", "attachment; filename="+file.FileName)
 	c.Data(http.StatusOK, "application/json", content)
+}
+
+func publicBaseURL(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	if host == "" {
+		return ""
+	}
+	return scheme + "://" + host + "/api/v1"
 }
 
 func (h *Handler) AdminUploadSharedAuthFile(c *gin.Context) {
@@ -640,13 +669,22 @@ func parseSharedAuthUploadOptions(c *gin.Context) services.AuthFileUploadOptions
 		mode = models.AuthDistributionMode(strings.TrimSpace(c.PostForm("distributionMode")))
 	}
 	options := services.AuthFileUploadOptions{DistributionMode: mode}
-	if quotaRaw := strings.TrimSpace(c.PostForm("quota_limit")); quotaRaw == "" {
+	if quotaUSD := firstNonEmptyString(c.PostForm("quota_limit_usd"), c.PostForm("quotaLimitUsd")); quotaUSD != "" {
+		if parsed, err := strconv.ParseFloat(quotaUSD, 64); err == nil && parsed > 0 {
+			options.QuotaLimit = int64(math.Round(parsed * 1_000_000))
+		}
+	} else if quotaRaw := strings.TrimSpace(c.PostForm("quota_limit")); quotaRaw == "" {
 		quotaRaw = strings.TrimSpace(c.PostForm("quotaLimit"))
 		if parsed, err := strconv.ParseInt(quotaRaw, 10, 64); err == nil {
 			options.QuotaLimit = parsed
 		}
 	} else if parsed, err := strconv.ParseInt(quotaRaw, 10, 64); err == nil {
 		options.QuotaLimit = parsed
+	}
+	if multiplierRaw := firstNonEmptyString(c.PostForm("billing_multiplier"), c.PostForm("billingMultiplier")); multiplierRaw != "" {
+		if parsed, err := strconv.ParseFloat(multiplierRaw, 64); err == nil && parsed > 0 {
+			options.BillingMultiplier = int64(math.Round(parsed * 1000))
+		}
 	}
 	if resetRaw := strings.TrimSpace(c.PostForm("quota_reset_at")); resetRaw == "" {
 		resetRaw = strings.TrimSpace(c.PostForm("quotaResetAt"))
@@ -657,6 +695,15 @@ func parseSharedAuthUploadOptions(c *gin.Context) services.AuthFileUploadOptions
 		options.QuotaResetAt = &parsed
 	}
 	return options
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (h *Handler) ConsumeSharedQuotaCard(c *gin.Context) {

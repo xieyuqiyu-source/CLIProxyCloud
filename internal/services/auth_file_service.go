@@ -3,6 +3,9 @@ package services
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	cryptoutil "github.com/xieyuqiyu-source/CLIProxyCloud/internal/crypto"
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/models"
 	"github.com/xieyuqiyu-source/CLIProxyCloud/internal/storage"
 	"gorm.io/gorm"
@@ -29,10 +33,34 @@ type AuthFileUploadResult struct {
 }
 
 type AuthFileUploadOptions struct {
-	DistributionMode models.AuthDistributionMode
-	QuotaLimit       int64
-	QuotaResetAt     *time.Time
+	DistributionMode  models.AuthDistributionMode
+	QuotaLimit        int64
+	BillingMultiplier int64
+	QuotaResetAt      *time.Time
 }
+
+type QuotaCardPackage struct {
+	Version                  int                         `json:"version"`
+	Kind                     string                      `json:"kind"`
+	Type                     string                      `json:"type"`
+	CloudFileID              uint                        `json:"cloudFileId"`
+	Provider                 string                      `json:"provider"`
+	DisplayName              string                      `json:"displayName"`
+	FileName                 string                      `json:"fileName"`
+	DistributionMode         models.AuthDistributionMode `json:"distributionMode"`
+	QuotaLimit               int64                       `json:"quotaLimit"`
+	QuotaUsed                int64                       `json:"quotaUsed"`
+	BillingMultiplier        int64                       `json:"billingMultiplier"`
+	QuotaUnit                string                      `json:"quotaUnit"`
+	QuotaBaseTokensPerDollar int64                       `json:"quotaBaseTokensPerDollar"`
+	QuotaResetAt             *time.Time                  `json:"quotaResetAt"`
+	Cipher                   string                      `json:"cipher"`
+	QuotaToken               string                      `json:"quotaToken"`
+	CloudBaseURL             string                      `json:"cloudBaseUrl"`
+	CreatedAt                time.Time                   `json:"createdAt"`
+}
+
+const quotaCardLocalKey = "cliproxy-cloud-quota-card-local-v1"
 
 func NewAuthFileService(db *gorm.DB, storage *storage.Storage) *AuthFileService {
 	return &AuthFileService{db: db, storage: storage}
@@ -157,6 +185,9 @@ func normalizeAuthUploadOptions(options AuthFileUploadOptions) AuthFileUploadOpt
 	}
 	if options.QuotaLimit < 0 {
 		options.QuotaLimit = 0
+	}
+	if options.BillingMultiplier <= 0 {
+		options.BillingMultiplier = 1000
 	}
 	return options
 }
@@ -291,10 +322,12 @@ func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserI
 		existing.DisplayName = displayName
 		existing.DistributionMode = options.DistributionMode
 		existing.QuotaLimit = options.QuotaLimit
+		existing.BillingMultiplier = options.BillingMultiplier
 		existing.QuotaResetAt = options.QuotaResetAt
 		if existing.DistributionMode != models.AuthDistributionQuotaCard {
 			existing.QuotaUsed = 0
 			existing.QuotaResetAt = nil
+			existing.BillingMultiplier = 1000
 		}
 		if err := s.db.Save(&existing).Error; err != nil {
 			return nil, err
@@ -322,20 +355,21 @@ func (s *AuthFileService) uploadBytes(ownerType models.AuthOwnerType, ownerUserI
 	}
 
 	authFile := &models.AuthFile{
-		OwnerType:        ownerType,
-		OwnerUserID:      ownerUserID,
-		Provider:         provider,
-		FileName:         fileName,
-		StoragePath:      path,
-		FileHash:         hash,
-		Encrypted:        true,
-		Status:           "active",
-		SourceType:       sourceType,
-		PlanRequired:     planRequired,
-		DisplayName:      displayName,
-		DistributionMode: options.DistributionMode,
-		QuotaLimit:       options.QuotaLimit,
-		QuotaResetAt:     options.QuotaResetAt,
+		OwnerType:         ownerType,
+		OwnerUserID:       ownerUserID,
+		Provider:          provider,
+		FileName:          fileName,
+		StoragePath:       path,
+		FileHash:          hash,
+		Encrypted:         true,
+		Status:            "active",
+		SourceType:        sourceType,
+		PlanRequired:      planRequired,
+		DisplayName:       displayName,
+		DistributionMode:  options.DistributionMode,
+		QuotaLimit:        options.QuotaLimit,
+		BillingMultiplier: options.BillingMultiplier,
+		QuotaResetAt:      options.QuotaResetAt,
 	}
 	if err := s.db.Create(authFile).Error; err != nil {
 		return nil, err
@@ -379,6 +413,94 @@ func (s *AuthFileService) ReadContent(file *models.AuthFile) ([]byte, error) {
 		return nil, fmt.Errorf("auth file is required")
 	}
 	return s.storage.Read(file.StoragePath)
+}
+
+func (s *AuthFileService) BuildQuotaCardPackage(file *models.AuthFile, cloudBaseURL string) ([]byte, string, error) {
+	if file == nil {
+		return nil, "", fmt.Errorf("auth file is required")
+	}
+	if file.DistributionMode != models.AuthDistributionQuotaCard {
+		return nil, "", fmt.Errorf("shared auth file is not a quota card")
+	}
+	content, err := s.ReadContent(file)
+	if err != nil {
+		return nil, "", err
+	}
+	sealed, err := cryptoutil.Encrypt(cryptoutil.NormalizeKey(quotaCardLocalKey), content)
+	if err != nil {
+		return nil, "", err
+	}
+	name := strings.TrimSuffix(file.FileName, filepath.Ext(file.FileName))
+	if name == "" {
+		name = fmt.Sprintf("quota-card-%d", file.ID)
+	}
+	payload := QuotaCardPackage{
+		Version:                  1,
+		Kind:                     "cloud_quota_card",
+		Type:                     "cloud-quota-card",
+		CloudFileID:              file.ID,
+		Provider:                 file.Provider,
+		DisplayName:              file.DisplayName,
+		FileName:                 file.FileName,
+		DistributionMode:         file.DistributionMode,
+		QuotaLimit:               file.QuotaLimit,
+		QuotaUsed:                file.QuotaUsed,
+		BillingMultiplier:        file.BillingMultiplier,
+		QuotaUnit:                "usd_micro",
+		QuotaBaseTokensPerDollar: 500000,
+		QuotaResetAt:             file.QuotaResetAt,
+		Cipher:                   base64.StdEncoding.EncodeToString(sealed),
+		QuotaToken:               s.QuotaCardAccessToken(file),
+		CloudBaseURL:             strings.TrimRight(cloudBaseURL, "/"),
+		CreatedAt:                time.Now().UTC(),
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return nil, "", err
+	}
+	return data, name + ".quota-card.json", nil
+}
+
+func (s *AuthFileService) QuotaCardAccessToken(file *models.AuthFile) string {
+	if file == nil {
+		return ""
+	}
+	seed := fmt.Sprintf("quota-card:%d:%s:%s", file.ID, file.FileHash, file.StoragePath)
+	sum := sha256.Sum256([]byte(seed))
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *AuthFileService) FindSharedQuotaCardWithToken(authFileID uint, token string) (*models.AuthFile, error) {
+	file, err := s.FindShared(authFileID)
+	if err != nil {
+		return nil, err
+	}
+	if file.DistributionMode != models.AuthDistributionQuotaCard {
+		return nil, fmt.Errorf("shared auth file is not a quota card")
+	}
+	if !constantTimeEqualString(s.QuotaCardAccessToken(file), token) {
+		return nil, fmt.Errorf("invalid quota card token")
+	}
+	return file, nil
+}
+
+func (s *AuthFileService) ConsumeQuotaCardWithToken(authFileID uint, token string, units int64) (*models.AuthFile, error) {
+	file, err := s.FindSharedQuotaCardWithToken(authFileID, token)
+	if err != nil {
+		return nil, err
+	}
+	return s.ConsumeQuotaCard(file.ID, units)
+}
+
+func constantTimeEqualString(a string, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	var diff byte
+	for index := range a {
+		diff |= a[index] ^ b[index]
+	}
+	return diff == 0
 }
 
 func (s *AuthFileService) ConsumeQuotaCard(authFileID uint, units int64) (*models.AuthFile, error) {

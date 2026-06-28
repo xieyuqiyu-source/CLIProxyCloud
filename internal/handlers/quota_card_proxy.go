@@ -79,6 +79,10 @@ func (h *Handler) SharedQuotaCardAPICall(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "shared auth file is not a quota card"})
 		return
 	}
+	if file.QuotaLimit > 0 && file.QuotaUsed >= file.QuotaLimit {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": "quota card limit exceeded"})
+		return
+	}
 
 	content, err := h.authFileSvc.ReadContent(file)
 	if err != nil {
@@ -87,16 +91,6 @@ func (h *Handler) SharedQuotaCardAPICall(c *gin.Context) {
 	}
 	placeholders := quotaCardPlaceholdersFromAuthJSON(content)
 	headers := replaceQuotaCardHeaderPlaceholders(req.Header, placeholders)
-
-	consumedFile, err := h.authFileSvc.ConsumeQuotaCard(uint(authFileID), req.ConsumeUnits)
-	if err != nil {
-		status := http.StatusBadRequest
-		if strings.Contains(err.Error(), "exceeded") {
-			status = http.StatusPaymentRequired
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
-		return
-	}
 
 	httpReq, err := http.NewRequest(method, target.String(), strings.NewReader(req.Data))
 	if err != nil {
@@ -114,14 +108,31 @@ func (h *Handler) SharedQuotaCardAPICall(c *gin.Context) {
 	client := &http.Client{Timeout: quotaCardAPICallTimeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "file": consumedFile})
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "file": file})
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "file": consumedFile})
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "file": file})
+		return
+	}
+	usedTokens := quotaUnitsFromResponseBody(body, req.ConsumeUnits)
+	consumedFile, err := h.authFileSvc.ConsumeQuotaCard(uint(authFileID), usedTokens)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "exceeded") {
+			status = http.StatusPaymentRequired
+		}
+		c.JSON(status, gin.H{
+			"error":       err.Error(),
+			"status_code": resp.StatusCode,
+			"header":      resp.Header,
+			"body":        string(body),
+			"used_tokens": usedTokens,
+			"file":        file,
+		})
 		return
 	}
 
@@ -139,6 +150,80 @@ func isAllowedQuotaCardMethod(method string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func quotaUnitsFromResponseBody(body []byte, fallback int64) int64 {
+	if fallback <= 0 {
+		fallback = 1
+	}
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return fallback
+	}
+	if tokens := findTokenUsage(payload); tokens > 0 {
+		return tokens
+	}
+	return fallback
+}
+
+func findTokenUsage(value any) int64 {
+	switch typed := value.(type) {
+	case map[string]any:
+		if usage, ok := typed["usage"]; ok {
+			if tokens := tokenUsageFromMap(usage); tokens > 0 {
+				return tokens
+			}
+		}
+		if tokens := tokenUsageFromMap(typed); tokens > 0 {
+			return tokens
+		}
+		for _, child := range typed {
+			if tokens := findTokenUsage(child); tokens > 0 {
+				return tokens
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if tokens := findTokenUsage(child); tokens > 0 {
+				return tokens
+			}
+		}
+	}
+	return 0
+}
+
+func tokenUsageFromMap(value any) int64 {
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return 0
+	}
+	for _, key := range []string{"total_tokens", "totalTokens", "input_tokens", "inputTokens", "output_tokens", "outputTokens"} {
+		if tokens := int64FromAny(typed[key]); tokens > 0 {
+			if key == "input_tokens" || key == "inputTokens" {
+				return tokens + int64FromAny(typed["output_tokens"]) + int64FromAny(typed["outputTokens"])
+			}
+			return tokens
+		}
+	}
+	return 0
+}
+
+func int64FromAny(value any) int64 {
+	switch typed := value.(type) {
+	case json.Number:
+		number, _ := typed.Int64()
+		return number
+	case float64:
+		return int64(typed)
+	case int64:
+		return typed
+	case int:
+		return int64(typed)
+	default:
+		return 0
 	}
 }
 

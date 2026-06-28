@@ -56,6 +56,14 @@ func (s *Storage) Read(path string) ([]byte, error) {
 	return cryptoutil.Decrypt(s.key, content)
 }
 
+func (s *Storage) Seal(content []byte) ([]byte, error) {
+	return cryptoutil.Encrypt(s.key, content)
+}
+
+func (s *Storage) Open(content []byte) ([]byte, error) {
+	return cryptoutil.Decrypt(s.key, content)
+}
+
 func (s *Storage) Delete(path string) error {
 	if path == "" {
 		return nil

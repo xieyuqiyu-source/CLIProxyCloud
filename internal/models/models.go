@@ -182,24 +182,25 @@ type RegistrationVerification struct {
 }
 
 type AuthFile struct {
-	ID               uint                 `gorm:"primaryKey" json:"id"`
-	OwnerType        AuthOwnerType        `gorm:"size:32;index;not null" json:"ownerType"`
-	OwnerUserID      *uint                `gorm:"index" json:"ownerUserId"`
-	Provider         string               `gorm:"size:64;not null" json:"provider"`
-	FileName         string               `gorm:"size:255;not null" json:"fileName"`
-	StoragePath      string               `gorm:"size:512;not null" json:"storagePath"`
-	FileHash         string               `gorm:"size:128;not null" json:"fileHash"`
-	Encrypted        bool                 `gorm:"not null;default:true" json:"encrypted"`
-	Status           string               `gorm:"size:32;not null;default:active" json:"status"`
-	SourceType       AuthSourceType       `gorm:"size:32;not null" json:"sourceType"`
-	PlanRequired     *string              `gorm:"size:64" json:"planRequired"`
-	DisplayName      string               `gorm:"size:255;not null" json:"displayName"`
-	DistributionMode AuthDistributionMode `gorm:"size:32;not null;default:plain" json:"distributionMode"`
-	QuotaLimit       int64                `gorm:"not null;default:0" json:"quotaLimit"`
-	QuotaUsed        int64                `gorm:"not null;default:0" json:"quotaUsed"`
-	QuotaResetAt     *time.Time           `json:"quotaResetAt"`
-	CreatedAt        time.Time            `json:"createdAt"`
-	UpdatedAt        time.Time            `json:"updatedAt"`
+	ID                uint                 `gorm:"primaryKey" json:"id"`
+	OwnerType         AuthOwnerType        `gorm:"size:32;index;not null" json:"ownerType"`
+	OwnerUserID       *uint                `gorm:"index" json:"ownerUserId"`
+	Provider          string               `gorm:"size:64;not null" json:"provider"`
+	FileName          string               `gorm:"size:255;not null" json:"fileName"`
+	StoragePath       string               `gorm:"size:512;not null" json:"storagePath"`
+	FileHash          string               `gorm:"size:128;not null" json:"fileHash"`
+	Encrypted         bool                 `gorm:"not null;default:true" json:"encrypted"`
+	Status            string               `gorm:"size:32;not null;default:active" json:"status"`
+	SourceType        AuthSourceType       `gorm:"size:32;not null" json:"sourceType"`
+	PlanRequired      *string              `gorm:"size:64" json:"planRequired"`
+	DisplayName       string               `gorm:"size:255;not null" json:"displayName"`
+	DistributionMode  AuthDistributionMode `gorm:"size:32;not null;default:plain" json:"distributionMode"`
+	QuotaLimit        int64                `gorm:"not null;default:0" json:"quotaLimit"`
+	QuotaUsed         int64                `gorm:"not null;default:0" json:"quotaUsed"`
+	QuotaResetAt      *time.Time           `json:"quotaResetAt"`
+	BillingMultiplier int64                `gorm:"not null;default:1000" json:"billingMultiplier"`
+	CreatedAt         time.Time            `json:"createdAt"`
+	UpdatedAt         time.Time            `json:"updatedAt"`
 }
 
 type AuthFileVersion struct {
