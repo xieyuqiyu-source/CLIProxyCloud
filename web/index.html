@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/assets/icon.png?v=1.0.0">
   <title>CPSwitch - 桌面代理工具</title>
   <meta name="description" content="CPSwitch 个人端使用入口与说明页。展示移动端风格界面、获取账号、OpenClaw 接入与会员开通说明。">
-  <link href="/assets/site.css?v=1.1.9" rel="stylesheet" type="text/css" />
+  <link href="/assets/site.css?v=1.2.0" rel="stylesheet" type="text/css" />
   <style>
     body {
       font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -188,12 +188,28 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div class="text-xs uppercase tracking-[0.28em] text-base-content/45">Latest Release</div>
-                <div class="mt-2 text-2xl font-black" id="download-version">v1.1.9</div>
-                <div class="mt-1 text-sm text-base-content/60" id="download-notes">更新内核</div>
+                <div class="mt-2 text-2xl font-black" id="download-version">v1.2.0</div>
+                <div class="mt-1 text-sm text-base-content/60" id="download-notes">更新 Mac 双架构安装包</div>
               </div>
               <div class="flex flex-wrap gap-3">
                 <a id="download-win" href="/downloads/cliproxyapp/CPSwitch_1.1.5_x64-setup.exe" class="btn btn-primary rounded-full px-6">下载 Win</a>
-                <a id="download-mac" href="/downloads/cliproxyapp/CPSwitch_1.1.9_aarch64.dmg" class="btn btn-outline rounded-full px-6">下载 Mac</a>
+                <div class="dropdown dropdown-hover dropdown-end">
+                  <a id="download-mac" tabindex="0" role="button" href="/downloads/cliproxyapp/CPSwitch_1.2.0_aarch64.dmg" class="btn btn-outline rounded-full px-6">下载 Mac</a>
+                  <ul tabindex="0" class="dropdown-content z-[60] mt-3 w-52 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-2xl">
+                    <li>
+                      <a id="download-mac-apple" href="/downloads/cliproxyapp/CPSwitch_1.2.0_aarch64.dmg" class="flex flex-col rounded-xl px-4 py-3 hover:bg-base-200">
+                        <span class="font-bold">Apple 芯片</span>
+                        <span class="text-xs text-base-content/55">M1 / M2 / M3 / M4</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a id="download-mac-intel" href="/downloads/cliproxyapp/CPSwitch_1.2.0_x64.dmg" class="mt-1 flex flex-col rounded-xl px-4 py-3 hover:bg-base-200">
+                        <span class="font-bold">Intel 芯片</span>
+                        <span class="text-xs text-base-content/55">x86_64 Mac</span>
+                      </a>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -376,6 +392,8 @@
         const notesNode = document.getElementById('download-notes');
         const winNode = document.getElementById('download-win');
         const macNode = document.getElementById('download-mac');
+        const macAppleNode = document.getElementById('download-mac-apple');
+        const macIntelNode = document.getElementById('download-mac-intel');
 
         if (versionNode && manifest.version) {
           versionNode.textContent = 'v' + manifest.version;
@@ -389,8 +407,23 @@
         if (winNode && manifest.downloads?.windows) {
           winNode.href = manifest.downloads.windows;
         }
-        if (macNode && manifest.downloads?.macos) {
-          macNode.href = manifest.downloads.macos;
+        const macApple = manifest.downloads?.['darwin-aarch64']
+          || manifest.downloads?.['macos-aarch64']
+          || manifest.downloads?.macosApple
+          || manifest.downloads?.macos;
+        const macIntel = manifest.downloads?.['darwin-x64']
+          || manifest.downloads?.['darwin-x86_64']
+          || manifest.downloads?.['macos-x64']
+          || manifest.downloads?.macosIntel
+          || manifest.downloads?.macos;
+        if (macNode && macApple) {
+          macNode.href = macApple;
+        }
+        if (macAppleNode && macApple) {
+          macAppleNode.href = macApple;
+        }
+        if (macIntelNode && macIntel) {
+          macIntelNode.href = macIntel;
         }
       } catch (_) {
       }
