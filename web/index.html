@@ -42,6 +42,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
         </div>
         <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+          <li><a href="#pricing">套餐价格</a></li>
           <li><a href="#how-to-use">使用说明</a></li>
           <li><a href="#features">核心能力</a></li>
         </ul>
@@ -57,12 +58,13 @@
     </div>
     <div class="navbar-center hidden lg:flex">
       <ul class="menu menu-horizontal px-1 font-medium">
+        <li><a href="#pricing">套餐价格</a></li>
         <li><a href="#how-to-use">使用说明</a></li>
         <li><a href="#features">核心能力</a></li>
       </ul>
     </div>
     <div class="navbar-end">
-      <a href="#how-to-use" class="btn btn-primary btn-sm md:btn-md rounded-full">开始使用</a>
+      <a href="#pricing" class="btn btn-primary btn-sm md:btn-md rounded-full">查看套餐</a>
     </div>
   </div>
 
@@ -178,11 +180,11 @@
             <span class="text-primary">极简高效</span>的个人体验
           </h1>
           <p class="py-6 text-lg text-base-content/70 leading-relaxed">
-            这个站点不依赖本地 CPA 和登录状态，只负责展示个人端界面样式、核心功能入口和使用说明，方便签约、对外介绍和用户了解产品。
+            集中管理 Codex、Claude 等账号与配额，一键接入 OpenClaw。免费下载客户端，按需升级会员。
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mt-4">
-            <a href="#how-to-use" class="btn btn-primary btn-lg rounded-full px-8 shadow-lg shadow-primary/20 border-none">查看使用说明</a>
-            <a href="#features" class="btn btn-outline btn-lg rounded-full px-8 hover:bg-base-300 hover:text-base-content hover:border-base-300">探索核心能力</a>
+            <a href="#pricing" class="btn btn-primary btn-lg rounded-full px-8 shadow-lg shadow-primary/20 border-none">查看价格</a>
+            <a href="#download-version" class="btn btn-outline btn-lg rounded-full px-8 hover:bg-base-300 hover:text-base-content hover:border-base-300">免费下载</a>
           </div>
           <div class="mt-6 rounded-3xl border border-base-300 bg-base-100/75 p-4 backdrop-blur-sm max-w-xl mx-auto lg:mx-0">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -231,6 +233,56 @@
       </div>
     </div>
 
+    <!-- 套餐价格 -->
+    <section id="pricing" class="py-24 bg-base-200">
+      <div class="max-w-5xl mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-12" data-aos="fade-up">
+          <div class="badge badge-primary badge-outline mb-4">会员套餐</div>
+          <h2 class="text-3xl md:text-4xl font-bold mb-4">先免费使用，再按需升级</h2>
+          <p class="text-base-content/70">当前通过客户端内“开通会员 → 人工协助”完成开通，确认后由管理员处理。</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="card bg-base-100 border border-base-300 shadow-lg" data-aos="fade-up">
+            <div class="card-body p-7">
+              <div class="flex items-center justify-between gap-4">
+                <h3 class="text-2xl font-black">Pro</h3>
+                <div class="badge badge-primary badge-outline">个人效率</div>
+              </div>
+              <div class="mt-4 flex items-end gap-2">
+                <span class="text-5xl font-black">¥49</span>
+                <span class="pb-2 text-base-content/55">/ 月</span>
+              </div>
+              <ul class="mt-5 space-y-3 text-sm text-base-content/75">
+                <li>✓ 自动切换可用账号</li>
+                <li>✓ 个人配置云同步</li>
+                <li>✓ 共享号池随机获取 3 个账号</li>
+              </ul>
+              <a href="#download-version" class="btn btn-primary mt-7 rounded-full">下载客户端并开通</a>
+            </div>
+          </div>
+          <div class="card bg-base-100 border-2 border-warning shadow-xl" data-aos="fade-up" data-aos-delay="100">
+            <div class="card-body p-7">
+              <div class="flex items-center justify-between gap-4">
+                <h3 class="text-2xl font-black">Pro Max</h3>
+                <div class="badge badge-warning">高频使用</div>
+              </div>
+              <div class="mt-4 flex items-end gap-2">
+                <span class="text-5xl font-black">¥168</span>
+                <span class="pb-2 text-base-content/55">/ 月</span>
+              </div>
+              <ul class="mt-5 space-y-3 text-sm text-base-content/75">
+                <li>✓ 包含 Pro 全部能力</li>
+                <li>✓ 最多获取 10 个共享账号</li>
+                <li>✓ 更适合高频、多模型工作流</li>
+              </ul>
+              <a href="#download-version" class="btn btn-warning mt-7 rounded-full">下载客户端并开通</a>
+            </div>
+          </div>
+        </div>
+        <p class="mt-6 text-center text-xs text-base-content/50">半年付与年付优惠以客户端内实时报价为准。</p>
+      </div>
+    </section>
+
     <!-- 使用说明区域 -->
     <section id="how-to-use" class="py-24 bg-base-100">
       <div class="max-w-6xl mx-auto px-6">
@@ -278,7 +330,7 @@
             <div class="card-body">
               <div class="w-12 h-12 rounded-2xl bg-warning/10 text-warning flex items-center justify-center text-xl font-black mb-4">05</div>
               <h3 class="card-title text-xl mb-2">开通会员</h3>
-              <p class="text-base-content/70 leading-relaxed text-sm">会员弹窗支持 Pro 与 Pro Max 的月付、半年付、年付选择，支付二维码与订单状态单独展示。</p>
+              <p class="text-base-content/70 leading-relaxed text-sm">会员弹窗支持 Pro 与 Pro Max 的月付、半年付、年付选择；展开“人工协助”即可联系管理员开通。</p>
             </div>
           </div>
           <!-- 步骤 6 -->
@@ -286,7 +338,7 @@
             <div class="card-body">
               <div class="w-12 h-12 rounded-2xl bg-success/10 text-success flex items-center justify-center text-xl font-black mb-4">06</div>
               <h3 class="card-title text-xl mb-2">持续使用</h3>
-              <p class="text-base-content/70 leading-relaxed text-sm">支付成功后会自动刷新会员等级与权益，Pro、Pro Max 分别控制共享号池、自动切换与云端备份能力。</p>
+              <p class="text-base-content/70 leading-relaxed text-sm">管理员确认后会更新会员等级与权益，Pro、Pro Max 分别控制共享号池、自动切换与云端备份能力。</p>
             </div>
           </div>
         </div>
@@ -344,7 +396,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
               </div>
               <h3 class="font-bold text-lg mb-2">会员与支付</h3>
-              <p class="text-sm text-base-content/70 leading-relaxed">支持 Pro / Pro Max、多周期付款选择、微信支付与订单轮询提醒。</p>
+              <p class="text-sm text-base-content/70 leading-relaxed">支持 Pro / Pro Max、多周期选择与客户端内人工协助开通。</p>
             </div>
           </div>
         </div>
@@ -354,11 +406,11 @@
     <!-- 底部 CTA -->
     <section class="py-20 bg-primary text-primary-content">
       <div class="max-w-4xl mx-auto px-6 text-center" data-aos="zoom-in" data-aos-duration="800">
-        <h2 class="text-3xl md:text-5xl font-bold mb-6">准备好提升效率了吗？</h2>
+        <h2 class="text-3xl md:text-5xl font-bold mb-6">先免费试用，再决定是否升级</h2>
         <p class="text-primary-content/80 mb-10 text-lg max-w-2xl mx-auto">
-          立即体验 CPSwitch 带来的便捷，无论是共享号池还是 OpenClaw 接入，一切都变得如此简单。
+          下载 CPSwitch，注册后即可开始使用。需要更多账号与自动切换时，再在客户端内联系人工协助开通。
         </p>
-        <a href="#how-to-use" class="btn btn-neutral btn-lg rounded-full px-12 border-none">立即开始</a>
+        <a href="#download-version" class="btn btn-neutral btn-lg rounded-full px-12 border-none">免费下载</a>
       </div>
     </section>
   </main>
