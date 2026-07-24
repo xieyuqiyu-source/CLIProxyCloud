@@ -40,6 +40,8 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 	router.Static("/assets", filepath.Join(webRoot, "assets"))
+	router.StaticFile("/robots.txt", filepath.Join(webRoot, "robots.txt"))
+	router.StaticFile("/sitemap.xml", filepath.Join(webRoot, "sitemap.xml"))
 	router.GET("/", func(c *gin.Context) {
 		c.File(filepath.Join(webRoot, "index.html"))
 	})
