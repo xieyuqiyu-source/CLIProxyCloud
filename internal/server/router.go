@@ -42,6 +42,7 @@ func NewRouter(handler *handlers.Handler, authMiddleware *middleware.AuthMiddlew
 	router.Static("/assets", filepath.Join(webRoot, "assets"))
 	router.StaticFile("/robots.txt", filepath.Join(webRoot, "robots.txt"))
 	router.StaticFile("/sitemap.xml", filepath.Join(webRoot, "sitemap.xml"))
+	router.StaticFile("/714c3d31614b64118f78bf3e4e3109aa.txt", filepath.Join(webRoot, "714c3d31614b64118f78bf3e4e3109aa.txt"))
 	router.GET("/", func(c *gin.Context) {
 		c.File(filepath.Join(webRoot, "index.html"))
 	})
